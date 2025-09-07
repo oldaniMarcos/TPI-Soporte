@@ -299,7 +299,7 @@ class MainWindow(QMainWindow):
         # --- Top bar ---
         top_widget = QWidget()
         top_layout = QHBoxLayout(top_widget)
-        top_layout.setContentsMargins(20, 10, 22, 0)
+        top_layout.setContentsMargins(20, 10, 20, 0)
 
         self.search_input = QLineEdit()
         self.search_input.setStyleSheet("""
@@ -340,33 +340,29 @@ class MainWindow(QMainWindow):
         loading_widget = QWidget()
         lv = QVBoxLayout(loading_widget)
         lv.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.loading_label = QLabel("⏳ Buscando datos...")
-        self.loading_label.setStyleSheet("""
-            QLabel {
-                font-size: 20px;
-            }
-        """)
-        self.loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         spinner = QProgressBar()
         spinner.setRange(0, 0)
-        spinner.setFixedWidth(200)
+        spinner.setFixedWidth(400)
 
-        lv.addWidget(self.loading_label)
         lv.addWidget(spinner)
         self.central_stack.addWidget(loading_widget)
 
         # Main Page
         self.central_stack.addWidget(self.build_main_content())
 
-        # History
-        right_panel = QGroupBox("Historial")
-        right_panel.setStyleSheet("""
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top center;
+        # Ticker Not Found Page
+        error_label = QLabel("⛔ No se encontró información del ticker solicitado")
+        error_label.setStyleSheet("""
+            QLabel {
+                font-size: 30px;
             }
         """)
+        error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.central_stack.addWidget(error_label)
+
+        # History
+        right_panel = QGroupBox("Historial")
         rh_layout = QVBoxLayout(right_panel)
         self.history_list = QListWidget()
         self.history_list.itemClicked.connect(self.on_history_clicked)
@@ -374,6 +370,7 @@ class MainWindow(QMainWindow):
 
         # Main layout
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_splitter.setContentsMargins(0, 0, 20, 10)
         main_splitter.addWidget(self.central_stack)
         main_splitter.addWidget(right_panel)
         main_splitter.setStretchFactor(0, 20)
@@ -400,33 +397,15 @@ class MainWindow(QMainWindow):
         central_layout.addWidget(self.chart, stretch=4)
 
         rating_group = QGroupBox("Indicadores")
-        rating_group.setStyleSheet("""
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top center;
-            }
-        """)
         rl = QVBoxLayout(rating_group)
         central_layout.addWidget(rating_group, stretch=1)
 
         news_group = QGroupBox('Últimas Noticias')
-        news_group.setStyleSheet("""
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top center;
-            }
-        """)
         nl = QVBoxLayout(news_group)
         self.news_list = QListWidget()
         nl.addWidget(self.news_list)
 
         summary_group = QGroupBox("Resumen")
-        summary_group.setStyleSheet("""
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top center;
-            }
-        """)
         sl = QVBoxLayout(summary_group)
         self.summary_view = QTextBrowser()
         self.summary_view.setOpenExternalLinks(True)
@@ -469,7 +448,6 @@ class MainWindow(QMainWindow):
         self.thread_pool.start(task)
 
     def on_price_history_fetched(self, df):
-
         # Shows main page
         self.central_stack.setCurrentIndex(2)
         self.statusBar().showMessage('Historial descargado correctamente.')
@@ -480,7 +458,7 @@ class MainWindow(QMainWindow):
         self.chart.update_data(dates, prices, self.current_ticker)
 
     def on_price_history_error(self, msg: str):
-        self.central_stack.setCurrentIndex(0)
+        self.central_stack.setCurrentIndex(3)
         self.statusBar().showMessage(msg)
         QMessageBox.warning(self, 'Error', msg)
 
@@ -507,6 +485,8 @@ class MainWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     apply_stylesheet(app, 'light_cyan_500.xml', invert_secondary=True)
+    with open("styles.qss", "r") as f:
+        app.setStyleSheet(app.styleSheet() + f.read())
     w = MainWindow()
     w.show()
     sys.exit(app.exec())

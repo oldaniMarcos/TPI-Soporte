@@ -1,0 +1,25 @@
+QGroupBox {
+    border-color: #757575;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top center;
+    color: #757575;
+}
+
+QProgressBar {
+    border: none;
+    background: #f0f0f0;
+    height: 8px;
+    border-radius: 4px;
+}
+
+QProgressBar::chunk {
+    background: #2563eb;
+    border-radius: 4px;
+}
+
+QGraphicsView {
+    border: none
+}
