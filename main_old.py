@@ -13,14 +13,20 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QListWidget, QListWidgetItem, QLabel,
-    QTextBrowser, QFrame, QMessageBox, QSizePolicy, QSplitter, QGroupBox,
-    QScrollArea, QStackedWidget, QProgressBar
+    QTextBrowser, QFrame, QMessageBox, QSizePolicy, QSplitter, QGroupBox
 )
 from qt_material import apply_stylesheet
-import pyqtgraph as pg
+
+# Intentar usar pyqtgraph
+USE_PYQTGRAPH = True
+try:
+    import pyqtgraph as pg
+except ImportError:
+    USE_PYQTGRAPH = False
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+    from matplotlib.figure import Figure
 
 # --------- Datos y tareas ---------
-# Revisar
 @dataclass
 class StockData:
     ticker: str
@@ -30,36 +36,30 @@ class StockData:
     news_items: List[str]
     summary: str
 
-
-# QRunnable doesn't support signals so they must be included here
-class PriceHistoryFetchSignals(QObject):
-    finished = pyqtSignal(object)
-    error = pyqtSignal(str)
-
 class PriceHistoryFetchTask(QRunnable):
     """
-    Fetches 1 year price history in 1 day intervals
+    WIP
     """
+    finished = pyqtSignal(dict)
+    error = pyqtSignal(str)
+    
     def __init__(self, ticker: str):
         super().__init__()
         self.ticker = ticker
-        self.signals = PriceHistoryFetchSignals()
 
     def run(self):
         try:
-            df = yf.download(self.ticker, period='1y', interval='1d', progress=False) # progress shows progress bar in console, not needed
+            ticker = yf.Ticker(self.ticker)
+            info = ticker.info
 
-            if df.empty:
-                self.signals.error.emit(
-                    f"No se encontraron datos para {self.ticker}. "
-                )
-                return
-            
-            self.signals.finished.emit(df)
+            if not info:
+                self.error.emit('No results found.')
+            else:
+                self.finished.emit(info)
+                print(info)
 
-        except Exception as e:
-            self.signals.error.emit(str(e))
-
+        except:
+            self.error.emit('Hubo un error al buscar el historial de precios')
 
 class DataFetchSignals(QObject):
     finished = pyqtSignal(object, str)  # StockData | None, error_message ("" si ok)
@@ -234,59 +234,38 @@ class WheelRatingSelector(QWidget):
         painter.drawPolygon(*tri_points)
 
 
-# --------- Chart Widget---------
+# --------- Widget para gráfico ---------
 class ChartWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-
         layout = QVBoxLayout(self)
-
-        # PyQtGraph Widget
-        self.plot = pg.PlotWidget()
-        self.plot.showGrid(x=True, y=True, alpha=0.3)
-        self.plot.setBackground("w")
-        #self.plot.setTitle("Evolución anual", color="#333", size="14pt")
-        self.plot.setLabel('left', 'Precio')
-        self.plot.setLabel('bottom', 'Días')
-        self.plot.getAxis('bottom').setTicks([])
-        self.plot.getAxis('left').setTicks([])
-        layout.addWidget(self.plot)
+        if USE_PYQTGRAPH:
+            self.plot = pg.PlotWidget()
+            self.plot.showGrid(x=True, y=True, alpha=0.3)
+            self.plot.setBackground("w")
+            layout.addWidget(self.plot)
+        else:
+            self.fig = Figure(figsize=(5, 3))
+            self.canvas = FigureCanvasQTAgg(self.fig)
+            layout.addWidget(self.canvas)
 
     def update_data(self, dates, prices, ticker: str):
-        """
-        Actualiza la gráfica con datos nuevos.
-        dates: lista de pd.Timestamp
-        prices: lista de floats
-        ticker: string del ticker
-        """
-        self.plot.clear()
+        if USE_PYQTGRAPH:
+            self.plot.clear()
+            x = list(range(len(dates)))
+            self.plot.plot(x, prices, pen=pg.mkPen("#2563eb", width=2))
+            self.plot.setTitle(f"Evolución anual {ticker}")
+        else:
+            self.fig.clear()
+            ax = self.fig.add_subplot(111)
+            x = list(range(len(dates)))
+            ax.plot(x, prices, color="#2563eb", linewidth=1.8)
+            ax.set_title(f"Evolución anual {ticker}")
+            ax.set_xlabel("Días")
+            ax.set_ylabel("Precio")
+            self.fig.tight_layout()
+            self.canvas.draw_idle()
 
-        x = list(range(len(dates)))
-
-        self.plot.plot(
-            x, prices,
-            pen=pg.mkPen("#2563eb", width=3),
-            symbol='o', symbolSize=5, symbolBrush="#2563eb"
-        )
-
-        self.plot.setTitle(f"Evolución anual {ticker}", color="#333", size="14pt")
-
-        tick_labels = [(i, dates[i].strftime("%d/%m")) for i in range(0, len(dates), max(1, len(dates)//20))]
-        self.plot.getAxis('bottom').setTicks([tick_labels])
-
-        min_price, max_price = min(prices), max(prices)
-        step = (max_price - min_price) / 6 if max_price > min_price else 1
-        yticks = [(round(min_price + i * step, 2), str(round(min_price + i * step, 2)))
-            for i in range(7)]
-        self.plot.getAxis('left').setTicks([yticks])
-
-    def reset(self):
-        self.plot.clear()
-        self.plot.setTitle("")
-        self.plot.setLabel('left', 'Precio')
-        self.plot.setLabel('bottom', 'Días')
-        self.plot.getAxis('bottom').setTicks([])
-        self.plot.getAxis('left').setTicks([])
 
 # --------- Main Window ---------
 class MainWindow(QMainWindow):
@@ -296,108 +275,41 @@ class MainWindow(QMainWindow):
         self.resize(1200, 800)
         self.thread_pool = QThreadPool()
 
-        # --- Top bar ---
         top_widget = QWidget()
         top_layout = QHBoxLayout(top_widget)
         top_layout.setContentsMargins(20, 10, 22, 0)
-
+        
         self.search_input = QLineEdit()
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                font-size: 16px;
-                font-weight: 600;
-            }
-        """)
         self.search_input.setPlaceholderText("Ticker (ej: AAPL)")
         self.search_input.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.search_input.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.search_input.textEdited.connect(self.capitalize_input)
-
+        
         self.search_button = QPushButton("Buscar")
         self.search_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.search_button.clicked.connect(self.on_search_clicked)
-
-        # Allows to press Enter to search
+        
+        # Allows to press enter to search while typing
+        
         self.search_input.returnPressed.connect(self.search_button.click)
-
+        
+        #top_layout.addWidget(QLabel("Empresa:"))
         top_layout.addWidget(self.search_input)
         top_layout.addWidget(self.search_button)
 
-        # --- Main container ---
-        self.central_stack = QStackedWidget()
-
-        # Start page
-        start_label = QLabel("🔎 Busque un ticker para comenzar")
-        start_label.setStyleSheet("""
-            QLabel {
-                font-size: 30px;
-            }
-        """)
-        start_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.central_stack.addWidget(start_label)
-
-        # Spinner page
-        loading_widget = QWidget()
-        lv = QVBoxLayout(loading_widget)
-        lv.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.loading_label = QLabel("⏳ Buscando datos...")
-        self.loading_label.setStyleSheet("""
-            QLabel {
-                font-size: 20px;
-            }
-        """)
-        self.loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        spinner = QProgressBar()
-        spinner.setRange(0, 0)
-        spinner.setFixedWidth(200)
-
-        lv.addWidget(self.loading_label)
-        lv.addWidget(spinner)
-        self.central_stack.addWidget(loading_widget)
-
-        # Main Page
-        self.central_stack.addWidget(self.build_main_content())
-
-        # History
-        right_panel = QGroupBox("Historial")
-        right_panel.setStyleSheet("""
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top center;
-            }
-        """)
-        rh_layout = QVBoxLayout(right_panel)
-        self.history_list = QListWidget()
-        self.history_list.itemClicked.connect(self.on_history_clicked)
-        rh_layout.addWidget(self.history_list)
-
-        # Main layout
-        main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        main_splitter.addWidget(self.central_stack)
-        main_splitter.addWidget(right_panel)
-        main_splitter.setStretchFactor(0, 20)
-        main_splitter.setStretchFactor(1, 3)
-
-        wrapper = QWidget()
-        wrapper_layout = QVBoxLayout(wrapper)
-        wrapper_layout.setContentsMargins(0, 0, 0, 0)
-        wrapper_layout.addWidget(top_widget, stretch=0)
-        wrapper_layout.addWidget(main_splitter, stretch=1)
-
-        self.setCentralWidget(wrapper)
-        self.showMaximized()
-        self.statusBar().showMessage('')
-
-    def build_main_content(self):
-        """Builds the main page"""
         central = QWidget()
         central_layout = QVBoxLayout(central)
         central_layout.setContentsMargins(10, 10, 20, 10)
-        central_layout.setSpacing(5)
+        central_layout.setSpacing(5) # seems to be doing nothing 
+
+        hsplit = QSplitter(Qt.Orientation.Horizontal)
+
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setSpacing(10)
 
         self.chart = ChartWidget()
-        central_layout.addWidget(self.chart, stretch=4)
+        left_layout.addWidget(self.chart, stretch=4)
 
         rating_group = QGroupBox("Indicadores")
         rating_group.setStyleSheet("""
@@ -407,7 +319,10 @@ class MainWindow(QMainWindow):
             }
         """)
         rl = QVBoxLayout(rating_group)
-        central_layout.addWidget(rating_group, stretch=1)
+        # self.wheel = WheelRatingSelector()
+        # self.wheel.ratingChanged.connect(self.on_manual_rating_changed)
+        # rl.addWidget(self.wheel)
+        left_layout.addWidget(rating_group, stretch=1)
 
         news_group = QGroupBox('Últimas Noticias')
         news_group.setStyleSheet("""
@@ -419,6 +334,7 @@ class MainWindow(QMainWindow):
         nl = QVBoxLayout(news_group)
         self.news_list = QListWidget()
         nl.addWidget(self.news_list)
+        #left_layout.addWidget(news_group, stretch=2)
 
         summary_group = QGroupBox("Resumen")
         summary_group.setStyleSheet("""
@@ -431,20 +347,50 @@ class MainWindow(QMainWindow):
         self.summary_view = QTextBrowser()
         self.summary_view.setOpenExternalLinks(True)
         sl.addWidget(self.summary_view)
-
+        #left_layout.addWidget(summary_group, stretch=2)
+        
+        # Horizontal container
+        
         news_summary_container = QWidget()
         ns_layout = QHBoxLayout(news_summary_container)
         ns_layout.setContentsMargins(0, 0, 0, 0)
+        #ns_layout.setSpacing(10)
+        
         ns_layout.addWidget(news_group, stretch=1)
         ns_layout.addWidget(summary_group, stretch=1)
+        
+        left_layout.addWidget(news_summary_container, stretch=4)
 
-        central_layout.addWidget(news_summary_container, stretch=4)
+        hsplit.addWidget(left_panel)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(central)
-        return scroll
+        right_panel = QGroupBox("Historial")
+        right_panel.setStyleSheet("""
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+            }
+        """)
+        rh_layout = QVBoxLayout(right_panel)
+        self.history_list = QListWidget()
+        self.history_list.itemClicked.connect(self.on_history_clicked)
+        rh_layout.addWidget(self.history_list)
+        hsplit.addWidget(right_panel)
+        hsplit.setStretchFactor(0, 20)
+        hsplit.setStretchFactor(1, 3)
 
+        central_layout.addWidget(hsplit)
+
+        wrapper = QWidget()
+        wrapper_layout = QVBoxLayout(wrapper)
+        wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        wrapper_layout.addWidget(top_widget, stretch=0)
+        wrapper_layout.addWidget(central, stretch=1)
+
+        self.setCentralWidget(wrapper)
+        self.showMaximized()
+
+        self.current_data: Optional[StockData] = None
+        
     # Capitalize input text
     def capitalize_input(self, text):
         cursor_position = self.search_input.cursorPosition()
@@ -456,35 +402,30 @@ class MainWindow(QMainWindow):
         if not ticker:
             QMessageBox.warning(self, "Atención", "Ingrese un ticker.")
             return
-        self.chart.reset()
-        self.central_stack.setCurrentIndex(1)
         self.start_fetch(ticker)
 
     def start_fetch(self, ticker: str):
-        self.current_ticker = ticker
         self.statusBar().showMessage(f"Buscando datos para {ticker} ...")
         task = PriceHistoryFetchTask(ticker)
-        task.signals.finished.connect(self.on_price_history_fetched)
-        task.signals.error.connect(self.on_price_history_error)
+        #task.finished.connect() #TODO
+        #task = DataFetchTask(ticker)
+        #task.signals.finished.connect(self.on_data_fetched)
         self.thread_pool.start(task)
 
-    def on_price_history_fetched(self, df):
-
-        # Shows main page
-        self.central_stack.setCurrentIndex(2)
-        self.statusBar().showMessage('Historial descargado correctamente.')
-
-        dates = df.index.to_list()
-        prices = df['Close'].iloc[:, 0].tolist()
-
-        self.chart.update_data(dates, prices, self.current_ticker)
-
-    def on_price_history_error(self, msg: str):
-        self.central_stack.setCurrentIndex(0)
-        self.statusBar().showMessage(msg)
-        QMessageBox.warning(self, 'Error', msg)
-
-    #self.update_history(data.ticker) # recordar esto al final
+    def on_data_fetched(self, data: Optional[StockData], error: str):
+        if error:
+            QMessageBox.critical(self, "Error", f"No se pudo obtener datos: {error}")
+            self.statusBar().showMessage("Error al obtener datos")
+            return
+        self.current_data = data
+        self.chart.update_data(data.dates, data.prices, data.ticker)
+        # self.wheel.setCurrent(data.rating)
+        self.news_list.clear()
+        for item in data.news_items[:5]:
+            QListWidgetItem(item, self.news_list)
+        self.summary_view.setHtml(f"<p>{data.summary}</p>")
+        self.statusBar().showMessage(f"Datos actualizados: {data.ticker}")
+        self.update_history(data.ticker)
 
     def update_history(self, ticker: str):
         if self.history_list.count() > 0:
@@ -497,11 +438,10 @@ class MainWindow(QMainWindow):
         ticker = item.text()
         self.start_fetch(ticker)
 
-    # No utilizado por el momento
-    # def on_manual_rating_changed(self, rating: str):
-    #     if self.current_data:
-    #         self.current_data.rating = rating
-    #         self.summary_view.append(f"<p><i>Calificación ajustada manualmente a: {rating}</i></p>")
+    def on_manual_rating_changed(self, rating: str):
+        if self.current_data:
+            self.current_data.rating = rating
+            self.summary_view.append(f"<p><i>Calificación ajustada manualmente a: {rating}</i></p>")
 
 
 def main():
