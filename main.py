@@ -59,67 +59,47 @@ class PriceHistoryFetchTask(QRunnable):
 
         except Exception as e:
             self.signals.error.emit(str(e))
+            
 
+class NewsFetchSignals(QObject):
+    finished = pyqtSignal(object)
 
-class DataFetchSignals(QObject):
-    finished = pyqtSignal(object, str)  # StockData | None, error_message ("" si ok)
-
-class DataFetchTask(QRunnable):
+class NewsFetchTask(QRunnable):
+    """
+    Fetches news of a given ticker
+    """
+    
     def __init__(self, ticker: str):
         super().__init__()
         self.ticker = ticker
-        self.signals = DataFetchSignals()
+        self.signals = NewsFetchSignals()
 
     def run(self):
-        import datetime
-        import random
         try:
-            # ticker = yf.Ticker(self.ticker)
-            # info = ticker.info
+            data = yf.Ticker('AAPL').get_news(count=10)
 
-            # print(info)
+            if not data:
+                self.signals.error.emit(
+                    f"No se encontraron noticias para {self.ticker}. "
+                )
+                return
+            
+            news = []
 
-            base_price = 100.0
-            prices = []
-            val = base_price
-            for _ in range(252):
-                val *= (1 + random.uniform(-0.01, 0.01))
-                prices.append(val)
+            for n in data:
+                content = n.get("content", {})
+                news.append({
+                "title": content.get("title"),
+                "link": content.get("canonicalUrl", {}).get("url"),
+                "publisher": content.get("provider", {}).get("displayName"),
+                "time": content.get("pubDate"),
+                "summary": content.get("summary")
+                })
+            
+            self.signals.finished.emit(news)
 
-            today = datetime.date.today()
-            dates = [today - datetime.timedelta(days=i) for i in range(252)]
-            dates.reverse()
-
-            news_items = [
-                f"{self.ticker}: Noticia {i+1} sobre desempeño y estrategia."
-                for i in range(5)
-            ]
-
-            change = (prices[-1] / prices[0]) - 1
-            if change > 0.05:
-                rating = "Buena"
-            elif change < -0.05:
-                rating = "Mala"
-            else:
-                rating = "Media"
-
-            summary = (
-                f"Resumen: La acción {self.ticker} muestra un cambio de "
-                f"{change:.2%} en el último año. Sentimiento general '{rating}'."
-            )
-
-            data = StockData(
-                ticker=self.ticker.upper(),
-                dates=dates,
-                prices=prices,
-                rating=rating,
-                news_items=news_items,
-                summary=summary
-            )
-            self.signals.finished.emit(data, "")
         except Exception as e:
-            self.signals.finished.emit(None, str(e))
-
+            self.signals.error.emit(str(e))
 
 # --------- Widget Ruleta (3 opciones) ---------
 class WheelRatingSelector(QWidget):
