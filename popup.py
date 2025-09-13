@@ -21,7 +21,7 @@ import pyqtgraph as pg
 
 from tasks import PriceHistoryFetchTask, NewsFetchTask
 
-from widgets import WheelRatingSelector, ChartWidget, NewsDetailPopup
+from widgets import WheelRatingSelector, ChartWidget
 
 # --------- Datos y tareas ---------
 # Revisar
@@ -234,13 +234,12 @@ class MainWindow(QMainWindow):
 
     def on_news_item_double_clicked(self, item: QListWidgetItem):
         """
-        Al hacer doble clic, abre un popup con los detalles de la noticia.
+        Al hacer doble clic, abre un diálogo con los detalles de la noticia.
         """
         news_data = item.data(Qt.ItemDataRole.UserRole)
         if news_data:
-            # Usamos el nuevo widget en lugar de QDialog
-            self.popup = NewsDetailPopup(news_data, self)
-            self.popup.show()
+            dialog = NewsDetailDialog(news_data, self)
+            dialog.exec()
 
     #self.update_history(data.ticker) # recordar esto al final
 
