@@ -150,7 +150,7 @@ class MainWindow(QMainWindow):
         news_group = QGroupBox('Últimas Noticias')
         nl = QVBoxLayout(news_group)
         self.news_list = QListWidget()
-        self.news_list.itemClicked.connect(self.on_news_item_double_clicked)
+        self.news_list.itemDoubleClicked.connect(self.on_news_item_double_clicked)
         nl.addWidget(self.news_list)
 
         summary_group = QGroupBox("Resumen")

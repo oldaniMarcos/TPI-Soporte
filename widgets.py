@@ -183,7 +183,8 @@ class NewsDetailPopup(QWidget):
         self.news_item = news_item
 
         # Configurar como una ventana de herramientas flotante que aparece sobre la principal
-        self.setWindowFlags(Qt.WindowType.Tool)
+        self.setWindowFlags(Qt.WindowType.Dialog)
+        self.setWindowModality(Qt.WindowModality.WindowModal)
         self.setWindowTitle("Detalle de la Noticia")
         self.setMinimumWidth(500)
         self.setMinimumHeight(250)
