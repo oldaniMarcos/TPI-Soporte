@@ -261,50 +261,6 @@ class MainWindow(QMainWindow):
     #         self.current_data.rating = rating
     #         self.summary_view.append(f"<p><i>Calificación ajustada manualmente a: {rating}</i></p>")
 
-class NewsDetailDialog(QDialog):
-    """
-    Un cuadro de diálogo para mostrar los detalles de una noticia.
-    """
-    def __init__(self, news_item: dict, parent=None):
-        super().__init__(parent)
-        self.news_item = news_item
-        self.setWindowTitle("Detalle de la Noticia")
-        self.setMinimumWidth(500)
-
-        layout = QVBoxLayout(self)
-
-        # Título
-        title_label = QLabel(self.news_item.get('title', 'Sin título'))
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold;")
-        title_label.setWordWrap(True)
-        layout.addWidget(title_label)
-
-        # Publicador y fecha
-        meta_text = f"<i>{self.news_item.get('publisher', '')} - {self.news_item.get('time', '')}</i>"
-        meta_label = QLabel(meta_text)
-        layout.addWidget(meta_label)
-
-        # Resumen
-        summary_label = QLabel(self.news_item.get('summary', 'No hay resumen disponible.'))
-        summary_label.setWordWrap(True)
-        layout.addWidget(summary_label)
-
-        # Botones
-        button_box = QDialogButtonBox()
-        open_button = button_box.addButton("Abrir Noticia", QDialogButtonBox.ButtonRole.ActionRole)
-        close_button = button_box.addButton("Cerrar", QDialogButtonBox.ButtonRole.RejectRole)
-        
-        layout.addWidget(button_box)
-
-        open_button.clicked.connect(self.open_link_and_close)
-        close_button.clicked.connect(self.reject)
-
-    def open_link_and_close(self):
-        link = self.news_item.get('link')
-        if link:
-            QDesktopServices.openUrl(QUrl(link))
-        self.accept() # Cierra el diálogo
-
 def main():
     app = QApplication(sys.argv)
     apply_stylesheet(app, 'light_cyan_500.xml', invert_secondary=True)
