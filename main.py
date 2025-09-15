@@ -5,19 +5,23 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from PyQt6.QtCore import (
-    Qt, QSize, QRectF, pyqtSignal, QObject, QThreadPool, QRunnable, QPointF  # <-- Añadido QPointF
+    Qt, QSize, QRectF, pyqtSignal, QObject, QThreadPool, QRunnable, QPointF, QUrl
 )
 from PyQt6.QtGui import (
-    QPainter, QPen, QBrush, QColor, QFont
+    QPainter, QPen, QBrush, QColor, QFont, QDesktopServices
 )
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QListWidget, QListWidgetItem, QLabel,
     QTextBrowser, QFrame, QMessageBox, QSizePolicy, QSplitter, QGroupBox,
-    QScrollArea, QStackedWidget, QProgressBar
+    QScrollArea, QStackedWidget, QProgressBar, QDialog, QDialogButtonBox
 )
 from qt_material import apply_stylesheet
 import pyqtgraph as pg
+
+from tasks import PriceHistoryFetchTask, NewsFetchTask
+
+from widgets import WheelRatingSelector, ChartWidget, NewsDetailPopup
 
 # --------- Datos y tareas ---------
 # Revisar
@@ -30,243 +34,6 @@ class StockData:
     news_items: List[str]
     summary: str
 
-
-# QRunnable doesn't support signals so they must be included here
-class PriceHistoryFetchSignals(QObject):
-    finished = pyqtSignal(object)
-    error = pyqtSignal(str)
-
-class PriceHistoryFetchTask(QRunnable):
-    """
-    Fetches 1 year price history in 1 day intervals
-    """
-    def __init__(self, ticker: str):
-        super().__init__()
-        self.ticker = ticker
-        self.signals = PriceHistoryFetchSignals()
-
-    def run(self):
-        try:
-            df = yf.download(self.ticker, period='1y', interval='1d', progress=False) # progress shows progress bar in console, not needed
-
-            if df.empty:
-                self.signals.error.emit(
-                    f"No se encontraron datos para {self.ticker}. "
-                )
-                return
-            
-            self.signals.finished.emit(df)
-
-        except Exception as e:
-            self.signals.error.emit(str(e))
-            
-
-class NewsFetchSignals(QObject):
-    finished = pyqtSignal(object)
-
-class NewsFetchTask(QRunnable):
-    """
-    Fetches news of a given ticker
-    """
-    
-    def __init__(self, ticker: str):
-        super().__init__()
-        self.ticker = ticker
-        self.signals = NewsFetchSignals()
-
-    def run(self):
-        try:
-            data = yf.Ticker('AAPL').get_news(count=10)
-
-            if not data:
-                self.signals.error.emit(
-                    f"No se encontraron noticias para {self.ticker}. "
-                )
-                return
-            
-            news = []
-
-            for n in data:
-                content = n.get("content", {})
-                news.append({
-                "title": content.get("title"),
-                "link": content.get("canonicalUrl", {}).get("url"),
-                "publisher": content.get("provider", {}).get("displayName"),
-                "time": content.get("pubDate"),
-                "summary": content.get("summary")
-                })
-            
-            self.signals.finished.emit(news)
-
-        except Exception as e:
-            self.signals.error.emit(str(e))
-
-# --------- Widget Ruleta (3 opciones) ---------
-class WheelRatingSelector(QWidget):
-    ratingChanged = pyqtSignal(str)
-
-    def __init__(self, options=None, parent=None):
-        super().__init__(parent)
-        self.options = options or ["Buena", "Media", "Mala"]
-        self.current_index = 0
-        self.setMinimumHeight(140)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._hover = False
-
-    def sizeHint(self):
-        return QSize(200, 140)
-
-    def wheelEvent(self, event):
-        delta = event.angleDelta().y()
-        if delta > 0:
-            self.current_index = (self.current_index - 1) % len(self.options)
-        else:
-            self.current_index = (self.current_index + 1) % len(self.options)
-        self.ratingChanged.emit(self.current())
-        self.update()
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.current_index = (self.current_index + 1) % len(self.options)
-            self.ratingChanged.emit(self.current())
-            self.update()
-
-    def enterEvent(self, _):
-        self._hover = True
-        self.update()
-
-    def leaveEvent(self, _):
-        self._hover = False
-        self.update()
-
-    def setCurrent(self, value: str):
-        if value in self.options:
-            self.current_index = self.options.index(value)
-            self.ratingChanged.emit(self.current())
-            self.update()
-
-    def current(self):
-        return self.options[self.current_index]
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        rect = self.rect().adjusted(10, 10, -10, -10)
-        size = min(rect.width(), rect.height())
-        circle_rect = QRectF(
-            rect.center().x() - size / 2,
-            rect.center().y() - size / 2,
-            size, size
-        )
-
-        colors = {
-            "Buena": QColor("#16a34a"),
-            "Media": QColor("#f59e0b"),
-            "Mala": QColor("#dc2626")
-        }
-        start_angle = -90
-        angle_per = 360 / len(self.options)
-
-        font = QFont(self.font())
-        font.setBold(True)
-        painter.setFont(font)
-
-        for i, opt in enumerate(self.options):
-            angle = start_angle + i * angle_per
-            painter.setPen(Qt.PenStyle.NoPen)
-            base_color = colors.get(opt, QColor("#6366f1"))
-            color = base_color.lighter(120) if i == self.current_index else base_color.darker(110)
-            painter.setBrush(QBrush(color))
-            painter.drawPie(circle_rect, int(angle * 16), int(angle_per * 16))
-
-            mid_angle_rad = math.radians(angle + angle_per / 2)
-            text_r = size * 0.33
-            tx = circle_rect.center().x() + text_r * math.cos(mid_angle_rad)
-            ty = circle_rect.center().y() + text_r * math.sin(mid_angle_rad)
-            painter.setPen(QPen(QColor("white") if i == self.current_index else QColor(255, 255, 255, 200)))
-            painter.drawText(
-                QRectF(tx - 40, ty - 15, 80, 30),
-                Qt.AlignmentFlag.AlignCenter,
-                opt
-            )
-
-        painter.setPen(QPen(QColor("#334155"), 2))
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawEllipse(circle_rect)
-
-        if self._hover:
-            painter.setPen(QPen(QColor("#6366f1"), 3))
-            painter.drawEllipse(circle_rect.adjusted(3, 3, -3, -3))
-
-        # Marcador superior (triángulo)
-        marker_width = 14
-        marker_height = 18
-        mx = circle_rect.center().x()
-        my = circle_rect.top() - 4
-        tri_points = [
-            QPointF(mx, my),
-            QPointF(mx - marker_width / 2, my - marker_height),
-            QPointF(mx + marker_width / 2, my - marker_height)
-        ]
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#0f172a"))
-        painter.drawPolygon(*tri_points)
-
-
-# --------- Chart Widget---------
-class ChartWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-        layout = QVBoxLayout(self)
-
-        # PyQtGraph Widget
-        self.plot = pg.PlotWidget()
-        self.plot.showGrid(x=True, y=True, alpha=0.3)
-        self.plot.setBackground("w")
-        #self.plot.setTitle("Evolución anual", color="#333", size="14pt")
-        self.plot.setLabel('left', 'Precio')
-        self.plot.setLabel('bottom', 'Días')
-        self.plot.getAxis('bottom').setTicks([])
-        self.plot.getAxis('left').setTicks([])
-        layout.addWidget(self.plot)
-
-    def update_data(self, dates, prices, ticker: str):
-        """
-        Actualiza la gráfica con datos nuevos.
-        dates: lista de pd.Timestamp
-        prices: lista de floats
-        ticker: string del ticker
-        """
-        self.plot.clear()
-
-        x = list(range(len(dates)))
-
-        self.plot.plot(
-            x, prices,
-            pen=pg.mkPen("#2563eb", width=3),
-            symbol='o', symbolSize=5, symbolBrush="#2563eb"
-        )
-
-        self.plot.setTitle(f"Evolución anual {ticker}", color="#333", size="14pt")
-
-        tick_labels = [(i, dates[i].strftime("%d/%m")) for i in range(0, len(dates), max(1, len(dates)//20))]
-        self.plot.getAxis('bottom').setTicks([tick_labels])
-
-        min_price, max_price = min(prices), max(prices)
-        step = (max_price - min_price) / 6 if max_price > min_price else 1
-        yticks = [(round(min_price + i * step, 2), str(round(min_price + i * step, 2)))
-            for i in range(7)]
-        self.plot.getAxis('left').setTicks([yticks])
-
-    def reset(self):
-        self.plot.clear()
-        self.plot.setTitle("")
-        self.plot.setLabel('left', 'Precio')
-        self.plot.setLabel('bottom', 'Días')
-        self.plot.getAxis('bottom').setTicks([])
-        self.plot.getAxis('left').setTicks([])
 
 # --------- Main Window ---------
 class MainWindow(QMainWindow):
@@ -345,7 +112,7 @@ class MainWindow(QMainWindow):
         right_panel = QGroupBox("Historial")
         rh_layout = QVBoxLayout(right_panel)
         self.history_list = QListWidget()
-        self.history_list.itemClicked.connect(self.on_history_clicked)
+        self.history_list.itemDoubleClicked.connect(self.on_history_clicked)
         rh_layout.addWidget(self.history_list)
 
         # Main layout
@@ -383,6 +150,7 @@ class MainWindow(QMainWindow):
         news_group = QGroupBox('Últimas Noticias')
         nl = QVBoxLayout(news_group)
         self.news_list = QListWidget()
+        self.news_list.itemDoubleClicked.connect(self.on_news_item_double_clicked)
         nl.addWidget(self.news_list)
 
         summary_group = QGroupBox("Resumen")
@@ -426,7 +194,10 @@ class MainWindow(QMainWindow):
         task.signals.finished.connect(self.on_price_history_fetched)
         task.signals.error.connect(self.on_price_history_error)
         self.thread_pool.start(task)
-
+        noticias = NewsFetchTask(ticker)
+        noticias.signals.finished.connect(self.on_news_fetched)
+        self.thread_pool.start(noticias)
+    
     def on_price_history_fetched(self, df):
         # Shows main page
         self.central_stack.setCurrentIndex(2)
@@ -441,6 +212,35 @@ class MainWindow(QMainWindow):
         self.central_stack.setCurrentIndex(3)
         self.statusBar().showMessage(msg)
         QMessageBox.warning(self, 'Error', msg)
+
+    def on_news_fetched(self, news: List[dict]):
+        self.statusBar().showMessage('Noticias descargadas correctamente.')
+        self.news_list.clear()
+        self.summary_view.clear()
+
+        if not news:
+            self.news_list.addItem("No se encontraron noticias.")
+            return
+
+        for n in news:
+            item = QListWidgetItem(f"{n['title']} ({n['publisher']})")
+            item.setToolTip(f"Doble clic para ver detalles...\n\n{n['summary']}")
+            item.setData(Qt.ItemDataRole.UserRole, n)
+            self.news_list.addItem(item)
+            """ self.summary_view.append(f"<h3><a href='{n['link']}'>{n['title']}</a></h3>")
+            self.summary_view.append(f"<p><i>{n['publisher']} - {n['time']}</i></p>")
+            self.summary_view.append(f"<p>{n['summary']}</p>")
+            self.summary_view.append("<hr>") """
+
+    def on_news_item_double_clicked(self, item: QListWidgetItem):
+        """
+        Al hacer doble clic, abre un popup con los detalles de la noticia.
+        """
+        news_data = item.data(Qt.ItemDataRole.UserRole)
+        if news_data:
+            # Usamos el nuevo widget en lugar de QDialog
+            self.popup = NewsDetailPopup(news_data, self)
+            self.popup.show()
 
     #self.update_history(data.ticker) # recordar esto al final
 
@@ -460,7 +260,6 @@ class MainWindow(QMainWindow):
     #     if self.current_data:
     #         self.current_data.rating = rating
     #         self.summary_view.append(f"<p><i>Calificación ajustada manualmente a: {rating}</i></p>")
-
 
 def main():
     app = QApplication(sys.argv)
