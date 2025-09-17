@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 from qt_material import apply_stylesheet
 import pyqtgraph as pg
 
-from tasks import PriceHistoryFetchTask, NewsFetchTask
+from tasks import PriceHistoryFetchTask, NewsFetchTask, GenerateSummaryTask
 
 from widgets import WheelRatingSelector, ChartWidget, NewsDetailPopup
 
@@ -183,20 +183,29 @@ class MainWindow(QMainWindow):
         if not ticker:
             QMessageBox.warning(self, "Atención", "Ingrese un ticker.")
             return
-        self.chart.reset()
         self.central_stack.setCurrentIndex(1)
+        self.chart.reset()
+        self.news_list.clear()
+        self.summary_view.clear()
         self.start_fetch(ticker)
 
     def start_fetch(self, ticker: str):
         self.current_ticker = ticker
         self.statusBar().showMessage(f"Buscando datos para {ticker} ...")
+        
         task = PriceHistoryFetchTask(ticker)
         task.signals.finished.connect(self.on_price_history_fetched)
         task.signals.error.connect(self.on_price_history_error)
         self.thread_pool.start(task)
+        
         noticias = NewsFetchTask(ticker)
         noticias.signals.finished.connect(self.on_news_fetched)
         self.thread_pool.start(noticias)
+        
+        summary = GenerateSummaryTask(ticker)
+        summary.signals.finished.connect(self.on_summary_generated)
+        summary.signals.error.connect(self.on_summary_error)
+        self.thread_pool.start(summary)
     
     def on_price_history_fetched(self, df):
         # Shows main page
@@ -216,7 +225,7 @@ class MainWindow(QMainWindow):
     def on_news_fetched(self, news: List[dict]):
         self.statusBar().showMessage('Noticias descargadas correctamente.')
         self.news_list.clear()
-        self.summary_view.clear()
+        #self.summary_view.clear()
 
         if not news:
             self.news_list.addItem("No se encontraron noticias.")
@@ -230,7 +239,17 @@ class MainWindow(QMainWindow):
             """ self.summary_view.append(f"<h3><a href='{n['link']}'>{n['title']}</a></h3>")
             self.summary_view.append(f"<p><i>{n['publisher']} - {n['time']}</i></p>")
             self.summary_view.append(f"<p>{n['summary']}</p>")
-            self.summary_view.append("<hr>") """
+            self.summary_view.append("<hr>") """        
+    
+    def on_summary_generated(self, summary: str):
+        self.statusBar().showMessage('Resumen generado correctamente.')
+        self.summary_view.clear()
+        self.summary_view.append(summary)
+        
+    def on_summary_error(self, error: str):
+        self.statusBar().showMessage('Error al generar el resumen.')
+        self.summary_view.clear()
+        self.summary_view.append(error)
 
     def on_news_item_double_clicked(self, item: QListWidgetItem):
         """
