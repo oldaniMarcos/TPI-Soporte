@@ -3,6 +3,7 @@ import math
 import yfinance as yf
 from dataclasses import dataclass
 from typing import List, Optional
+from datetime import datetime
 
 from PyQt6.QtCore import (
     Qt, QSize, QRectF, pyqtSignal, QObject, QThreadPool, QRunnable, QPointF, QUrl
@@ -112,8 +113,12 @@ class MainWindow(QMainWindow):
         right_panel = QGroupBox("Historial")
         rh_layout = QVBoxLayout(right_panel)
         self.history_list = QListWidget()
+        self.history_list.setUniformItemSizes(True)
         self.history_list.itemDoubleClicked.connect(self.on_history_clicked)
         rh_layout.addWidget(self.history_list)
+        clear_btn = QPushButton("Limpiar")
+        clear_btn.clicked.connect(self.clear_history)
+        rh_layout.addWidget(clear_btn)
 
         # Main layout
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -185,17 +190,20 @@ class MainWindow(QMainWindow):
             return
         self.chart.reset()
         self.central_stack.setCurrentIndex(1)
-        self.start_fetch(ticker)
+        self.start_fetch(ticker, add_to_history=True)
 
-    def start_fetch(self, ticker: str):
+    def start_fetch(self, ticker: str, add_to_history: bool = True):
         self.current_ticker = ticker
         self.statusBar().showMessage(f"Buscando datos para {ticker} ...")
+        if add_to_history:
+            self.add_history_entry(ticker)
         task = PriceHistoryFetchTask(ticker)
         task.signals.finished.connect(self.on_price_history_fetched)
         task.signals.error.connect(self.on_price_history_error)
         self.thread_pool.start(task)
         noticias = NewsFetchTask(ticker)
         noticias.signals.finished.connect(self.on_news_fetched)
+        noticias.signals.error.connect(self.on_news_error)
         self.thread_pool.start(noticias)
     
     def on_price_history_fetched(self, df):
@@ -244,16 +252,37 @@ class MainWindow(QMainWindow):
 
     #self.update_history(data.ticker) # recordar esto al final
 
+    def on_news_error(self, msg: str):
+        self.statusBar().showMessage(msg)
+        if hasattr(self, "news_list") and self.news_list is not None:
+            self.news_list.clear()
+            self.news_list.addItem(msg)
+
+    def add_history_entry(self, ticker: str):
+        ts = datetime.now().strftime("%d/%m/%Y %H:%M")
+        item = QListWidgetItem(f"{ticker} — {ts}")
+        # guardo los datos "crudos" para re-lanzar la búsqueda sin parsear texto
+        item.setData(Qt.ItemDataRole.UserRole, ticker)
+        self.history_list.insertItem(0, item)
+        self.history_list.setCurrentRow(0)
+
     def update_history(self, ticker: str):
         if self.history_list.count() > 0:
             last_item = self.history_list.item(self.history_list.count() - 1)
             if last_item.text() == ticker:
                 return
         QListWidgetItem(ticker, self.history_list)
+    
+    def clear_history(self):
+        self.history_list.clear()
+        self.statusBar().showMessage("Historial borrado.")
 
     def on_history_clicked(self, item: QListWidgetItem):
-        ticker = item.text()
-        self.start_fetch(ticker)
+        ticker = item.data(Qt.ItemDataRole.UserRole)  
+        self.search_input.setText(ticker)  
+        self.chart.reset()
+        self.central_stack.setCurrentIndex(1)
+        self.start_fetch(ticker, add_to_history=False)
 
     # No utilizado por el momento
     # def on_manual_rating_changed(self, rating: str):
