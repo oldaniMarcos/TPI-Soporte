@@ -37,6 +37,7 @@ class PriceHistoryFetchTask(QRunnable):
 
 class NewsFetchSignals(QObject):
     finished = pyqtSignal(object)
+    error = pyqtSignal(str)
 
 class NewsFetchTask(QRunnable):
     """
