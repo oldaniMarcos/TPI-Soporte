@@ -1,7 +1,7 @@
 import math
 import pyqtgraph as pg
 from PyQt6.QtCore import Qt, QSize, QRectF, pyqtSignal, QPointF
-from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont,QDesktopServices
+from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont,QDesktopServices, QRadialGradient
 from PyQt6.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox
 from PyQt6.QtCore import QUrl
 
@@ -230,3 +230,84 @@ class NewsDetailPopup(QWidget):
         if link:
             QDesktopServices.openUrl(QUrl(link))
         self.close()
+        
+# Circle widget
+
+class StatusCircle(QWidget):
+    """Circle with radial gradient"""
+    def __init__(self, color="gray", parent=None):
+        super().__init__(parent)
+        self._color = QColor(color)
+        self.setFixedSize(QSize(50, 50))
+
+    def setColor(self, color: str):
+        self._color = QColor(color)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        gradient = QRadialGradient(
+            self.width() / 2,
+            self.height() / 2,
+            self.width() / 2
+        )
+        
+        gradient.setColorAt(0.0, self._color)
+        gradient.setColorAt(0.5, self._color.lighter(110))
+        gradient.setColorAt(0.8, self._color.lighter(120))
+        edge_color = QColor(self._color.lighter(130))
+        edge_color.setAlpha(0)
+        gradient.setColorAt(1.0, edge_color)
+
+        painter.setBrush(gradient)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(0, 0, self.width(), self.height())
+
+# Indicator widget
+
+class IndicatorWidget(QWidget):
+    def __init__(self, title: str, value: float, status: str = "neutral", parent=None):
+        super().__init__(parent)
+
+        self.circle = StatusCircle()
+
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+
+        self.value_label = QLabel(str(value))
+        self.value_label.setStyleSheet("font-size: 16px; color: #333;")
+
+        h_layout = QHBoxLayout()
+        h_layout.setContentsMargins(0, 0, 0, 0)
+        h_layout.setSpacing(6)
+        h_layout.addWidget(self.circle, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+        text_layout = QVBoxLayout()
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(2)
+        text_layout.addWidget(self.title_label)
+        text_layout.addWidget(self.value_label)
+        
+        h_layout.addLayout(text_layout)
+        self.setLayout(h_layout)
+
+        self.setStatus(status)
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self.setContentsMargins(10, 10, 10, 10)
+
+    def setStatus(self, status: str):
+        """Changes color depending on status"""
+        if status == "good":
+            self.circle.setColor("#4CAF50")
+        elif status == "neutral":
+            self.circle.setColor("#FFC107")
+        elif status == "bad":
+            self.circle.setColor("#F44336")
+        else:
+            self.circle.setColor("#9E9E9E")
+
+    def setValue(self, value: float):
+        """Updates shown value"""
+        self.value_label.setText(str(value))
