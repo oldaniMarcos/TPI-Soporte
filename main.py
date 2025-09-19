@@ -15,14 +15,14 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QListWidget, QListWidgetItem, QLabel,
     QTextBrowser, QFrame, QMessageBox, QSizePolicy, QSplitter, QGroupBox,
-    QScrollArea, QStackedWidget, QProgressBar, QDialog, QDialogButtonBox
+    QScrollArea, QStackedWidget, QProgressBar, QDialog, QDialogButtonBox, QGridLayout
 )
 from qt_material import apply_stylesheet
 import pyqtgraph as pg
 
-from tasks import PriceHistoryFetchTask, NewsFetchTask
+from tasks import PriceHistoryFetchTask, NewsFetchTask, GenerateSummaryTask
 
-from widgets import WheelRatingSelector, ChartWidget, NewsDetailPopup
+from widgets import WheelRatingSelector, ChartWidget, NewsDetailPopup, IndicatorWidget
 
 # --------- Datos y tareas ---------
 # Revisar
@@ -149,7 +149,35 @@ class MainWindow(QMainWindow):
         central_layout.addWidget(self.chart, stretch=4)
 
         rating_group = QGroupBox("Indicadores")
-        rl = QVBoxLayout(rating_group)
+        
+        # Indicadores de ejemplo, eliminar despues
+        ind1 = IndicatorWidget("Promedio Móvil 50d", 135.7, "good")
+        ind2 = IndicatorWidget("RSI", 72, "bad")
+        ind3 = IndicatorWidget("Volatilidad", 1.25, "neutral")
+        ind4 = IndicatorWidget("Promedio Móvil 50d", 135.7, "good")
+        ind5 = IndicatorWidget("RSI", 72, "bad")
+        ind6 = IndicatorWidget("Volatilidad", 1.25, "neutral")
+        ind7 = IndicatorWidget("Promedio Móvil 50d", 135.7, "good")
+        ind8 = IndicatorWidget("RSI", 72, "bad")
+        ind9 = IndicatorWidget("Volatilidad", 1.25, "neutral")
+        ind10 = IndicatorWidget("Promedio Móvil 50d", 135.7, "good")
+        ind11 = IndicatorWidget("RSI", 72, "bad")
+        ind12 = IndicatorWidget("Volatilidad", 1.25, "neutral")
+
+        rl = QGridLayout(rating_group)
+        rl.addWidget(ind1, 0, 0)
+        rl.addWidget(ind2, 0, 1)
+        rl.addWidget(ind3, 0, 2)
+        rl.addWidget(ind4, 0, 3)
+        rl.addWidget(ind5, 0, 4)
+        rl.addWidget(ind6, 0, 5)
+        rl.addWidget(ind7, 1, 0)
+        rl.addWidget(ind8, 1, 1)
+        rl.addWidget(ind9, 1, 2)
+        rl.addWidget(ind10, 1, 3)
+        rl.addWidget(ind11, 1, 4)
+        rl.addWidget(ind12, 1, 5)
+        
         central_layout.addWidget(rating_group, stretch=1)
 
         news_group = QGroupBox('Últimas Noticias')
@@ -188,8 +216,10 @@ class MainWindow(QMainWindow):
         if not ticker:
             QMessageBox.warning(self, "Atención", "Ingrese un ticker.")
             return
-        self.chart.reset()
         self.central_stack.setCurrentIndex(1)
+        self.chart.reset()
+        self.news_list.clear()
+        self.summary_view.clear()
         self.start_fetch(ticker, add_to_history=True)
 
     def start_fetch(self, ticker: str, add_to_history: bool = True):
@@ -201,10 +231,16 @@ class MainWindow(QMainWindow):
         task.signals.finished.connect(self.on_price_history_fetched)
         task.signals.error.connect(self.on_price_history_error)
         self.thread_pool.start(task)
+        
         noticias = NewsFetchTask(ticker)
         noticias.signals.finished.connect(self.on_news_fetched)
         noticias.signals.error.connect(self.on_news_error)
         self.thread_pool.start(noticias)
+        
+        summary = GenerateSummaryTask(ticker)
+        summary.signals.finished.connect(self.on_summary_generated)
+        summary.signals.error.connect(self.on_summary_error)
+        self.thread_pool.start(summary)
     
     def on_price_history_fetched(self, df):
         # Shows main page
@@ -224,7 +260,7 @@ class MainWindow(QMainWindow):
     def on_news_fetched(self, news: List[dict]):
         self.statusBar().showMessage('Noticias descargadas correctamente.')
         self.news_list.clear()
-        self.summary_view.clear()
+        #self.summary_view.clear()
 
         if not news:
             self.news_list.addItem("No se encontraron noticias.")
@@ -238,7 +274,17 @@ class MainWindow(QMainWindow):
             """ self.summary_view.append(f"<h3><a href='{n['link']}'>{n['title']}</a></h3>")
             self.summary_view.append(f"<p><i>{n['publisher']} - {n['time']}</i></p>")
             self.summary_view.append(f"<p>{n['summary']}</p>")
-            self.summary_view.append("<hr>") """
+            self.summary_view.append("<hr>") """        
+    
+    def on_summary_generated(self, summary: str):
+        self.statusBar().showMessage('Resumen generado correctamente.')
+        self.summary_view.clear()
+        self.summary_view.append(summary)
+        
+    def on_summary_error(self, error: str):
+        self.statusBar().showMessage('Error al generar el resumen.')
+        self.summary_view.clear()
+        self.summary_view.append(error)
 
     def on_news_item_double_clicked(self, item: QListWidgetItem):
         """

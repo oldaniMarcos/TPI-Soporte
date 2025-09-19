@@ -6,6 +6,14 @@ import json
 def get_news(ticker: str, limit: int = 10):
   data = yf.Ticker(ticker).get_news(count=limit)
   
+  info = yf.Ticker(ticker).get_info()
+  try:
+    print(info['displayName'])
+    print(info['shortName'])
+    print(info['longName'])
+  except:
+    pass
+  
   '''
   Get the 10 most recent news of a given ticker
   '''
@@ -28,9 +36,9 @@ def get_news(ticker: str, limit: int = 10):
   return results
 
 if __name__ == "__main__":
-  news = get_news("AAPL")
-  for n in news:
-    print(f"{n['title']} ({n['publisher']})")
-    print(f"{n['link']} - {n['time']}")
-    print(f"SUMMARY: {n['summary']}")
-    print('---')
+  news = get_news("XRP-USD")
+  # for n in news:
+  #   print(f"{n['title']} ({n['publisher']})")
+  #   print(f"{n['link']} - {n['time']}")
+  #   print(f"SUMMARY: {n['summary']}")
+  #   print('---')
