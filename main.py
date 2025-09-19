@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from PyQt6.QtCore import (
-    Qt, QSize, QRectF, pyqtSignal, QObject, QThreadPool, QRunnable, QPointF, QUrl
+    Qt, QSize, QRectF, pyqtSignal, QObject, QThreadPool, QRunnable, QPointF, QUrl, QSettings
 )
 from PyQt6.QtGui import (
     QPainter, QPen, QBrush, QColor, QFont, QDesktopServices
@@ -113,6 +113,7 @@ class MainWindow(QMainWindow):
         right_panel = QGroupBox("Historial")
         rh_layout = QVBoxLayout(right_panel)
         self.history_list = QListWidget()
+        self.load_history()
         self.history_list.setUniformItemSizes(True)
         self.history_list.itemDoubleClicked.connect(self.on_history_clicked)
         rh_layout.addWidget(self.history_list)
@@ -203,9 +204,9 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(central)
+        
         return scroll
 
-    # Capitalize input text
     def capitalize_input(self, text):
         cursor_position = self.search_input.cursorPosition()
         self.search_input.setText(text.upper())
@@ -220,13 +221,18 @@ class MainWindow(QMainWindow):
         self.chart.reset()
         self.news_list.clear()
         self.summary_view.clear()
-        self.start_fetch(ticker, add_to_history=True)
+        self.start_fetch(ticker)
 
-    def start_fetch(self, ticker: str, add_to_history: bool = True):
+    def start_fetch(self, ticker: str):
         self.current_ticker = ticker
         self.statusBar().showMessage(f"Buscando datos para {ticker} ...")
-        if add_to_history:
-            self.add_history_entry(ticker)
+        
+        # Aca hay un problema, las tareas se ejecutan igual aunque el ticker sea invalido
+        # Deberian iniciarse si es valido, es decir primero buscar el historial (ya que es la primera tarea)
+        # Y despues cuando esa se ejecute correctamente buscar las noticias y generar el resumen (que es lo mas pesado y tiene limite de requests por dia)
+        # Hay que poner el resto de las tareas adentro de on_price_history_fetched
+        # Estaria bueno agregar una pantalla de carga para cada widget (no el del grafico porque ese aparece primero)
+        
         task = PriceHistoryFetchTask(ticker)
         task.signals.finished.connect(self.on_price_history_fetched)
         task.signals.error.connect(self.on_price_history_error)
@@ -251,6 +257,7 @@ class MainWindow(QMainWindow):
         prices = df['Close'].iloc[:, 0].tolist()
 
         self.chart.update_data(dates, prices, self.current_ticker)
+        self.add_history_entry(self.current_ticker)
 
     def on_price_history_error(self, msg: str):
         self.central_stack.setCurrentIndex(3)
@@ -260,7 +267,6 @@ class MainWindow(QMainWindow):
     def on_news_fetched(self, news: List[dict]):
         self.statusBar().showMessage('Noticias descargadas correctamente.')
         self.news_list.clear()
-        #self.summary_view.clear()
 
         if not news:
             self.news_list.addItem("No se encontraron noticias.")
@@ -270,11 +276,7 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(f"{n['title']} ({n['publisher']})")
             item.setToolTip(f"Doble clic para ver detalles...\n\n{n['summary']}")
             item.setData(Qt.ItemDataRole.UserRole, n)
-            self.news_list.addItem(item)
-            """ self.summary_view.append(f"<h3><a href='{n['link']}'>{n['title']}</a></h3>")
-            self.summary_view.append(f"<p><i>{n['publisher']} - {n['time']}</i></p>")
-            self.summary_view.append(f"<p>{n['summary']}</p>")
-            self.summary_view.append("<hr>") """        
+            self.news_list.addItem(item)      
     
     def on_summary_generated(self, summary: str):
         self.statusBar().showMessage('Resumen generado correctamente.')
@@ -296,8 +298,6 @@ class MainWindow(QMainWindow):
             self.popup = NewsDetailPopup(news_data, self)
             self.popup.show()
 
-    #self.update_history(data.ticker) # recordar esto al final
-
     def on_news_error(self, msg: str):
         self.statusBar().showMessage(msg)
         if hasattr(self, "news_list") and self.news_list is not None:
@@ -305,19 +305,19 @@ class MainWindow(QMainWindow):
             self.news_list.addItem(msg)
 
     def add_history_entry(self, ticker: str):
-        ts = datetime.now().strftime("%d/%m/%Y %H:%M")
-        item = QListWidgetItem(f"{ticker} — {ts}")
-        # guardo los datos "crudos" para re-lanzar la búsqueda sin parsear texto
+        
+        # Remove the same ticker if it's already in the list
+        for i in range(self.history_list.count()):
+            item = self.history_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == ticker:
+                self.history_list.takeItem(i)
+                break
+        
+        item = QListWidgetItem(f"{ticker}")
         item.setData(Qt.ItemDataRole.UserRole, ticker)
+        
         self.history_list.insertItem(0, item)
         self.history_list.setCurrentRow(0)
-
-    def update_history(self, ticker: str):
-        if self.history_list.count() > 0:
-            last_item = self.history_list.item(self.history_list.count() - 1)
-            if last_item.text() == ticker:
-                return
-        QListWidgetItem(ticker, self.history_list)
     
     def clear_history(self):
         self.history_list.clear()
@@ -328,10 +328,28 @@ class MainWindow(QMainWindow):
         self.search_input.setText(ticker)  
         self.chart.reset()
         self.central_stack.setCurrentIndex(1)
-        self.start_fetch(ticker, add_to_history=False)
+        self.start_fetch(ticker)
+        
+    def save_history(self):
+        settings = QSettings('Dashboard', 'Dashboard')
+        tickers = []
+        for i in range(self.history_list.count()):
+            item = self.history_list.item(i)
+            tickers.append(item.data(Qt.ItemDataRole.UserRole))
+        settings.setValue('history', tickers)
+    
+    def load_history(self):
+        settings = QSettings('Dashboard', 'Dashboard')
+        tickers = settings.value('history', [])
+        if tickers:
+            for ticker in tickers:
+                self.add_history_entry(ticker)
+    
+    def closeEvent(self, event):
+        self.save_history()
+        return super().closeEvent(event)
 
     # No utilizado por el momento
-    # def on_manual_rating_changed(self, rating: str):
     #     if self.current_data:
     #         self.current_data.rating = rating
     #         self.summary_view.append(f"<p><i>Calificación ajustada manualmente a: {rating}</i></p>")
