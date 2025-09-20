@@ -155,6 +155,8 @@ class ChartWidget(QWidget):
             symbol='o', symbolSize=5, symbolBrush="#2563eb"
         )
 
+        self.plot.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+
         self.plot.setTitle(f"Evolución anual {ticker}", color="#333", size="14pt")
 
         tick_labels = [(i, dates[i].strftime("%d/%m")) for i in range(0, len(dates), max(1, len(dates)//20))]

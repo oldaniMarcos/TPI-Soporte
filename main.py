@@ -84,16 +84,16 @@ class MainWindow(QMainWindow):
         start_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.central_stack.addWidget(start_label)
 
-        # Spinner page
+        # Loading page
         loading_widget = QWidget()
         lv = QVBoxLayout(loading_widget)
         lv.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        spinner = QProgressBar()
-        spinner.setRange(0, 0)
-        spinner.setFixedWidth(400)
+        progress = QProgressBar()
+        progress.setRange(0, 0)
+        progress.setFixedWidth(400)
 
-        lv.addWidget(spinner)
+        lv.addWidget(progress)
         self.central_stack.addWidget(loading_widget)
 
         # Main Page
@@ -181,23 +181,57 @@ class MainWindow(QMainWindow):
         
         central_layout.addWidget(rating_group, stretch=1)
 
+        # News stack
+        self.news_stack = QStackedWidget()
+
+        # News loading screen
+        news_loading = QGroupBox('Últimas Noticias')
+        nl_loading = QVBoxLayout(news_loading)
+        nl_loading.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        news_progress = QProgressBar()
+        news_progress.setRange(0, 0)
+        news_progress.setFixedWidth(200)
+        nl_loading.addWidget(news_progress)
+        self.news_stack.addWidget(news_loading)
+
+        # News
         news_group = QGroupBox('Últimas Noticias')
-        nl = QVBoxLayout(news_group)
+        nl_content = QVBoxLayout(news_group)
         self.news_list = QListWidget()
         self.news_list.itemDoubleClicked.connect(self.on_news_item_double_clicked)
-        nl.addWidget(self.news_list)
+        nl_content.addWidget(self.news_list)
+        self.news_stack.addWidget(news_group)
 
+        self.news_stack.setCurrentIndex(0)
+
+        # Summary stack
+        self.summary_stack = QStackedWidget()
+
+        # Summary loading screen
+        summary_loading = QGroupBox('Resumen')
+        sl_loading = QVBoxLayout(summary_loading)
+        sl_loading.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        summary_progress = QProgressBar()
+        summary_progress.setRange(0, 0)
+        summary_progress.setFixedWidth(200)
+        sl_loading.addWidget(summary_progress)
+        self.summary_stack.addWidget(summary_loading)
+
+        # Summary
         summary_group = QGroupBox("Resumen")
-        sl = QVBoxLayout(summary_group)
+        sl_content = QVBoxLayout(summary_group)
         self.summary_view = QTextBrowser()
         self.summary_view.setOpenExternalLinks(True)
-        sl.addWidget(self.summary_view)
+        sl_content.addWidget(self.summary_view)
+        self.summary_stack.addWidget(summary_group)
+
+        self.summary_stack.setCurrentIndex(0)
 
         news_summary_container = QWidget()
         ns_layout = QHBoxLayout(news_summary_container)
         ns_layout.setContentsMargins(0, 0, 0, 0)
-        ns_layout.addWidget(news_group, stretch=1)
-        ns_layout.addWidget(summary_group, stretch=1)
+        ns_layout.addWidget(self.news_stack, stretch=1)
+        ns_layout.addWidget(self.summary_stack, stretch=1)
 
         central_layout.addWidget(news_summary_container, stretch=4)
 
@@ -227,29 +261,28 @@ class MainWindow(QMainWindow):
         self.current_ticker = ticker
         self.statusBar().showMessage(f"Buscando datos para {ticker} ...")
         
-        # Aca hay un problema, las tareas se ejecutan igual aunque el ticker sea invalido
-        # Deberian iniciarse si es valido, es decir primero buscar el historial (ya que es la primera tarea)
-        # Y despues cuando esa se ejecute correctamente buscar las noticias y generar el resumen (que es lo mas pesado y tiene limite de requests por dia)
-        # Hay que poner el resto de las tareas adentro de on_price_history_fetched
         # Estaria bueno agregar una pantalla de carga para cada widget (no el del grafico porque ese aparece primero)
         
-        task = PriceHistoryFetchTask(ticker)
-        task.signals.finished.connect(self.on_price_history_fetched)
-        task.signals.error.connect(self.on_price_history_error)
-        self.thread_pool.start(task)
+        price_history = PriceHistoryFetchTask(ticker)
+        price_history.signals.finished.connect(self.on_price_history_fetched)
+        price_history.signals.error.connect(self.on_price_history_error)
+        self.thread_pool.start(price_history)
+    
+    def on_price_history_fetched(self, df):
+        """
+        Shows main page, starts other tasks, updates ticker history chart
+        """
+
+        news = NewsFetchTask(self.current_ticker)
+        news.signals.finished.connect(self.on_news_fetched)
+        news.signals.error.connect(self.on_news_error)
+        self.thread_pool.start(news)
         
-        noticias = NewsFetchTask(ticker)
-        noticias.signals.finished.connect(self.on_news_fetched)
-        noticias.signals.error.connect(self.on_news_error)
-        self.thread_pool.start(noticias)
-        
-        summary = GenerateSummaryTask(ticker)
+        summary = GenerateSummaryTask(self.current_ticker)
         summary.signals.finished.connect(self.on_summary_generated)
         summary.signals.error.connect(self.on_summary_error)
         self.thread_pool.start(summary)
-    
-    def on_price_history_fetched(self, df):
-        # Shows main page
+
         self.central_stack.setCurrentIndex(2)
         self.statusBar().showMessage('Historial descargado correctamente.')
 
@@ -276,12 +309,20 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(f"{n['title']} ({n['publisher']})")
             item.setToolTip(f"Doble clic para ver detalles...\n\n{n['summary']}")
             item.setData(Qt.ItemDataRole.UserRole, n)
-            self.news_list.addItem(item)      
+            self.news_list.addItem(item)   
+
+        self.news_stack.setCurrentIndex(1)   
     
-    def on_summary_generated(self, summary: str):
+    def on_summary_generated(self, ticker: str, summary: str):
+
+        # Ignore old tickers
+        if ticker != self.current_ticker:
+            return
+        
         self.statusBar().showMessage('Resumen generado correctamente.')
         self.summary_view.clear()
         self.summary_view.append(summary)
+        self.summary_stack.setCurrentIndex(1)
         
     def on_summary_error(self, error: str):
         self.statusBar().showMessage('Error al generar el resumen.')

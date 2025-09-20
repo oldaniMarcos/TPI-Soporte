@@ -80,7 +80,7 @@ class NewsFetchTask(QRunnable):
             
 
 class GenerateSummarySignals(QObject):
-    finished = pyqtSignal(str)
+    finished = pyqtSignal(str, str)
     error = pyqtSignal(str)
 
 class GenerateSummaryTask(QRunnable):
@@ -109,7 +109,7 @@ class GenerateSummaryTask(QRunnable):
                 )
                 return
 
-            self.signals.finished.emit(summary.text)
+            self.signals.finished.emit(self.ticker, summary.text)
 
         except Exception as e:
             self.signals.error.emit(str(e))
