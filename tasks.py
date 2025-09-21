@@ -11,17 +11,30 @@ class PriceHistoryFetchSignals(QObject):
 
 class PriceHistoryFetchTask(QRunnable):
     """
-    Fetches 1 year price history in 1 day intervals
+    Fetches price history.
+    Period: 1 day, 1 month, 1 year, year to date, max.
+    Intervals vary.
     """
-    def __init__(self, ticker: str):
+    def __init__(self, ticker: str, period: str):
         super().__init__()
         self.ticker = ticker
         self.signals = PriceHistoryFetchSignals()
+        self.period = period
 
     def run(self):
         
         try:
-            df = yf.download(self.ticker, period='1y', interval='1d', progress=False) # progress shows progress bar in console, not needed
+            
+            if(self.period == '1d'):
+                df = yf.download(self.ticker, period='1d', interval='5m', progress=False)
+            elif(self.period == '1mo'):
+                df = yf.download(self.ticker, period='1mo', interval='1h', progress=False)
+            elif(self.period == '1y'):
+                df = yf.download(self.ticker, period='1y', interval='1d', progress=False)
+            elif(self.period == 'ytd'):
+                df = yf.download(self.ticker, period='ytd', interval='1d', progress=False)
+            elif(self.period == 'max'):
+                df = yf.download(self.ticker, period='max', interval='1mo', progress=False)
 
             if df.empty:
                 self.signals.error.emit(
@@ -33,7 +46,6 @@ class PriceHistoryFetchTask(QRunnable):
 
         except Exception as e:
             self.signals.error.emit(str(e))
-            
 
 class NewsFetchSignals(QObject):
     finished = pyqtSignal(object)

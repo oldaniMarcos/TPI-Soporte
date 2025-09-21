@@ -147,6 +147,7 @@ class MainWindow(QMainWindow):
         central_layout.setSpacing(5)
 
         self.chart = ChartWidget()
+        self.chart.period_changed.connect(self.on_period_changed)
         central_layout.addWidget(self.chart, stretch=4)
 
         rating_group = QGroupBox("Indicadores")
@@ -261,9 +262,12 @@ class MainWindow(QMainWindow):
         self.current_ticker = ticker
         self.statusBar().showMessage(f"Buscando datos para {ticker} ...")
         
-        # Estaria bueno agregar una pantalla de carga para cada widget (no el del grafico porque ese aparece primero)
+        self.news_stack.setCurrentIndex(0)
+        self.summary_stack.setCurrentIndex(0)
         
-        price_history = PriceHistoryFetchTask(ticker)
+        self.chart.reset_period()
+        
+        price_history = PriceHistoryFetchTask(ticker, period='1y')
         price_history.signals.finished.connect(self.on_price_history_fetched)
         price_history.signals.error.connect(self.on_price_history_error)
         self.thread_pool.start(price_history)
@@ -285,12 +289,21 @@ class MainWindow(QMainWindow):
 
         self.central_stack.setCurrentIndex(2)
         self.statusBar().showMessage('Historial descargado correctamente.')
+        
+        self.update_chart(df)
 
+    def update_chart(self, df):
         dates = df.index.to_list()
         prices = df['Close'].iloc[:, 0].tolist()
-
         self.chart.update_data(dates, prices, self.current_ticker)
         self.add_history_entry(self.current_ticker)
+
+    def on_period_changed(self):
+        period = self.chart.get_period()
+        task = PriceHistoryFetchTask(self.current_ticker, period=period)
+        task.signals.finished.connect(self.update_chart)
+        task.signals.error.connect(self.on_price_history_error)
+        self.thread_pool.start(task)
 
     def on_price_history_error(self, msg: str):
         self.central_stack.setCurrentIndex(3)

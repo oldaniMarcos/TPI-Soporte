@@ -2,7 +2,7 @@ import math
 import pyqtgraph as pg
 from PyQt6.QtCore import Qt, QSize, QRectF, pyqtSignal, QPointF
 from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont,QDesktopServices, QRadialGradient
-from PyQt6.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox
+from PyQt6.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox, QComboBox
 from PyQt6.QtCore import QUrl
 
 
@@ -122,10 +122,27 @@ class WheelRatingSelector(QWidget):
 
 # --------- Chart Widget---------
 class ChartWidget(QWidget):
+    
+    period_changed = pyqtSignal(str)
+    
     def __init__(self, parent=None):
         super().__init__(parent)
 
         layout = QVBoxLayout(self)
+        
+        top_row = QHBoxLayout()
+        top_row.addStretch()
+        
+        self.droplist = QComboBox()
+        self.droplist.addItems(['1 día', '1 mes', '1 año', 'Year to date', 'Máximo'])
+        self.droplist.setFixedWidth(175)
+        self.droplist.setEditable(True)
+        self.droplist.lineEdit().setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.droplist.lineEdit().setReadOnly(True)
+        
+        top_row.addWidget(self.droplist)
+        
+        layout.addLayout(top_row)
 
         # PyQtGraph Widget
         self.plot = pg.PlotWidget()
@@ -137,6 +154,12 @@ class ChartWidget(QWidget):
         self.plot.getAxis('bottom').setTicks([])
         self.plot.getAxis('left').setTicks([])
         layout.addWidget(self.plot)
+        
+        self.droplist.currentIndexChanged.connect(self._on_period_changed)
+    
+    def _on_period_changed(self, index: int):
+        text = self.droplist.itemText(index)
+        self.period_changed.emit(text)
 
     def update_data(self, dates, prices, ticker: str):
         """
@@ -175,6 +198,20 @@ class ChartWidget(QWidget):
         self.plot.setLabel('bottom', 'Días')
         self.plot.getAxis('bottom').setTicks([])
         self.plot.getAxis('left').setTicks([])
+        
+    def get_period(self) -> str:
+        mapping = {
+            "1 día": "1d",
+            "1 mes": "1mo",
+            "1 año": "1y",
+            "Year to date": "ytd",
+            "Máximo": "max"
+        }
+        text = self.droplist.currentText()
+        return mapping.get(text, "1y")  # 1y default
+    
+    def reset_period(self):
+        self.droplist.setCurrentIndex(2)
 
 class NewsDetailPopup(QWidget):
     """
