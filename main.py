@@ -272,7 +272,7 @@ class MainWindow(QMainWindow):
         price_history.signals.error.connect(self.on_price_history_error)
         self.thread_pool.start(price_history)
     
-    def on_price_history_fetched(self, df):
+    def on_price_history_fetched(self, period, df):
         """
         Shows main page, starts other tasks, updates ticker history chart
         """
@@ -290,12 +290,13 @@ class MainWindow(QMainWindow):
         self.central_stack.setCurrentIndex(2)
         self.statusBar().showMessage('Historial descargado correctamente.')
         
-        self.update_chart(df)
+        if(period == '1y'):
+            self.update_chart(period, df)
 
-    def update_chart(self, df):
+    def update_chart(self, period, df):
         dates = df.index.to_list()
         prices = df['Close'].iloc[:, 0].tolist()
-        self.chart.update_data(dates, prices, self.current_ticker)
+        self.chart.update_data(dates, prices, self.current_ticker, period)
         self.add_history_entry(self.current_ticker)
 
     def on_period_changed(self):

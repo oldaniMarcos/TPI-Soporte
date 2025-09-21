@@ -161,12 +161,13 @@ class ChartWidget(QWidget):
         text = self.droplist.itemText(index)
         self.period_changed.emit(text)
 
-    def update_data(self, dates, prices, ticker: str):
+    def update_data(self, dates, prices, ticker: str, period: str):
         """
         Actualiza la gráfica con datos nuevos.
         dates: lista de pd.Timestamp
         prices: lista de floats
         ticker: string del ticker
+        period: string del periodo
         """
         self.plot.clear()
 
@@ -177,18 +178,48 @@ class ChartWidget(QWidget):
             pen=pg.mkPen("#2563eb", width=3),
             symbol='o', symbolSize=5, symbolBrush="#2563eb"
         )
-
+        
         self.plot.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
-
-        self.plot.setTitle(f"Evolución anual {ticker}", color="#333", size="14pt")
-
-        tick_labels = [(i, dates[i].strftime("%d/%m")) for i in range(0, len(dates), max(1, len(dates)//20))]
+        
+        titles = {
+            "1d": "Evolución intradía",
+            "1mo": "Evolución mensual",
+            "1y": "Evolución anual",
+            "ytd": "Evolución YTD",
+            "max": "Evolución histórica"
+        }
+        self.plot.setTitle(f"{titles.get(period, 'Evolución')} - {ticker}", color="#333", size="14pt")
+        
+        # Interval adjustment
+        if period == "1d":      
+            fmt = "%H:%M"
+        elif period == "1mo":    
+            fmt = "%d/%m %Hh"
+        elif period in ("1y", "ytd"): 
+            fmt = "%d/%m"
+        elif period == "max":     
+            fmt = "%m/%Y"
+        else:
+            fmt = "%d/%m"
+        
+        tick_labels = [
+            (i, dates[i].strftime(fmt))
+            for i in range(0, len(dates), max(1, len(dates)//20))
+        ]
+        
+        # Include last date unless period is ytd or max
+        last_idx = len(dates) - 1
+        if period not in ('ytd', 'max') and tick_labels[-1][0] != last_idx:
+            tick_labels.append((last_idx, dates[-1].strftime(fmt)))
+        
         self.plot.getAxis('bottom').setTicks([tick_labels])
 
         min_price, max_price = min(prices), max(prices)
         step = (max_price - min_price) / 6 if max_price > min_price else 1
-        yticks = [(round(min_price + i * step, 2), str(round(min_price + i * step, 2)))
-            for i in range(7)]
+        yticks = [
+            (round(min_price + i * step, 2), str(round(min_price + i * step, 2)))
+            for i in range(7)
+        ]
         self.plot.getAxis('left').setTicks([yticks])
 
     def reset(self):
@@ -211,7 +242,9 @@ class ChartWidget(QWidget):
         return mapping.get(text, "1y")  # 1y default
     
     def reset_period(self):
+        self.droplist.blockSignals(True) # Block index changed signal to avoid duplications
         self.droplist.setCurrentIndex(2)
+        self.droplist.blockSignals(False)
 
 class NewsDetailPopup(QWidget):
     """

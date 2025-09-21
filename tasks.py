@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 # QRunnable doesn't support signals so they must be included here
 class PriceHistoryFetchSignals(QObject):
-    finished = pyqtSignal(object)
+    finished = pyqtSignal(str, object)
     error = pyqtSignal(str)
 
 class PriceHistoryFetchTask(QRunnable):
@@ -42,7 +42,7 @@ class PriceHistoryFetchTask(QRunnable):
                 )
                 return
             
-            self.signals.finished.emit(df)
+            self.signals.finished.emit(self.period, df)
 
         except Exception as e:
             self.signals.error.emit(str(e))
