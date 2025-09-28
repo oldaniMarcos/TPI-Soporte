@@ -3,6 +3,9 @@ from PyQt6.QtCore import QObject, QRunnable, pyqtSignal
 from google import genai
 import os
 from dotenv import load_dotenv
+import pandas as pd
+import indicadores
+
 
 # QRunnable doesn't support signals so they must be included here
 class PriceHistoryFetchSignals(QObject):
@@ -125,3 +128,50 @@ class GenerateSummaryTask(QRunnable):
 
         except Exception as e:
             self.signals.error.emit(str(e))
+
+class GenerateDatosIndicadoresSignals(QObject):
+    finished = pyqtSignal(object)
+    error = pyqtSignal(str)
+
+class GenerateDatosIndicadoresTask(QRunnable):
+
+    def __init__(self, ticker: str):
+        super().__init__()
+        self.ticker = ticker
+        self.signals = GenerateDatosIndicadoresSignals()
+
+    def fetch_data(self):
+
+        df = yf.download(self.ticker, period='1y', interval='1d', progress=False)
+        if df.empty:
+            self.signals.error.emit(f"No se encontraron datos para {self.ticker}. ")
+            return None
+        return df
+
+    def run(self):
+        try:
+            df = self.fetch_data()
+            if df is None:
+                return
+            SMA10, estado_SMA10 = indicadores.promedio_movil(df['Close'], 10)
+            SMA50, estado_SMA50 = indicadores.promedio_movil(df['Close'], 50)
+            SMA200, estado_SMA200 = indicadores.promedio_movil(df['Close'], 200)
+            MACD_line, Signal_line, Histograma, estado_MACD = indicadores.macd(df['Close'])
+            K_percent, D_percent, estado_Estocastico = indicadores.oscilador_estocastico(df) 
+            RSI_value, estado_RSI = indicadores.rsi(df['Close'])
+            Volatilidad_value, estado_Volatilidad = indicadores.volatilidad(df['Close'])
+
+            datos_indicadores = {
+                'SMA10': (SMA10, estado_SMA10),
+                'SMA50': (SMA50, estado_SMA50),
+                'SMA200': (SMA200, estado_SMA200),
+                'MACD': (MACD_line, Signal_line, Histograma, estado_MACD),
+                'Estocastico': (K_percent, D_percent, estado_Estocastico),
+                'RSI': (RSI_value, estado_RSI),
+                'Volatilidad': (Volatilidad_value, estado_Volatilidad)
+            }
+            self.signals.finished.emit(datos_indicadores)
+            
+        except Exception as e:
+            self.signals.error.emit(str(e))        
+

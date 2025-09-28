@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
 from qt_material import apply_stylesheet
 import pyqtgraph as pg
 
-from tasks import PriceHistoryFetchTask, NewsFetchTask, GenerateSummaryTask
+from tasks import PriceHistoryFetchTask, NewsFetchTask, GenerateSummaryTask, GenerateDatosIndicadoresTask
 
 from widgets import WheelRatingSelector, ChartWidget, NewsDetailPopup, IndicatorWidget
 
@@ -150,9 +150,9 @@ class MainWindow(QMainWindow):
         self.chart.period_changed.connect(self.on_period_changed)
         central_layout.addWidget(self.chart, stretch=4)
 
-        rating_group = QGroupBox("Indicadores")
-        
-        # Indicadores de ejemplo, eliminar despues
+        self.rating_group = QGroupBox("Indicadores")
+        self.indicators_layout = QGridLayout(self.rating_group)
+        """ # Indicadores de ejemplo, eliminar despues
         ind1 = IndicatorWidget("Promedio Móvil 50d", 135.7, "good")
         ind2 = IndicatorWidget("RSI", 72, "bad")
         ind3 = IndicatorWidget("Volatilidad", 1.25, "neutral")
@@ -160,27 +160,17 @@ class MainWindow(QMainWindow):
         ind5 = IndicatorWidget("RSI", 72, "bad")
         ind6 = IndicatorWidget("Volatilidad", 1.25, "neutral")
         ind7 = IndicatorWidget("Promedio Móvil 50d", 135.7, "good")
-        ind8 = IndicatorWidget("RSI", 72, "bad")
-        ind9 = IndicatorWidget("Volatilidad", 1.25, "neutral")
-        ind10 = IndicatorWidget("Promedio Móvil 50d", 135.7, "good")
-        ind11 = IndicatorWidget("RSI", 72, "bad")
-        ind12 = IndicatorWidget("Volatilidad", 1.25, "neutral")
 
         rl = QGridLayout(rating_group)
         rl.addWidget(ind1, 0, 0)
         rl.addWidget(ind2, 0, 1)
         rl.addWidget(ind3, 0, 2)
         rl.addWidget(ind4, 0, 3)
-        rl.addWidget(ind5, 0, 4)
-        rl.addWidget(ind6, 0, 5)
-        rl.addWidget(ind7, 1, 0)
-        rl.addWidget(ind8, 1, 1)
-        rl.addWidget(ind9, 1, 2)
-        rl.addWidget(ind10, 1, 3)
-        rl.addWidget(ind11, 1, 4)
-        rl.addWidget(ind12, 1, 5)
+        rl.addWidget(ind5, 1, 0)
+        rl.addWidget(ind6, 1, 1)
+        rl.addWidget(ind7, 1, 2) """
         
-        central_layout.addWidget(rating_group, stretch=1)
+        central_layout.addWidget(self.rating_group, stretch=1)
 
         # News stack
         self.news_stack = QStackedWidget()
@@ -290,8 +280,56 @@ class MainWindow(QMainWindow):
         self.central_stack.setCurrentIndex(2)
         self.statusBar().showMessage('Historial descargado correctamente.')
         
+        indicadores = GenerateDatosIndicadoresTask(self.current_ticker)
+        indicadores.signals.finished.connect(self.indicators_generated)
+        indicadores.signals.error.connect(self.on_indicator_error)
+        self.thread_pool.start(indicadores)
+
         if(period == '1y'):
             self.update_chart(period, df)
+
+    def indicators_generated(self, datos_indicadores):
+        # Aquí puedes actualizar los widgets de indicadores con los datos recibidos
+        """ print("Indicadores generados:", datos_indicadores)
+        self.statusBar().showMessage('Indicadores generados correctamente.') """
+
+        # Limpiar el layout actual
+        for i in reversed(range(self.indicators_layout.count())):
+            self.indicators_layout.itemAt(i).widget().setParent(None) 
+
+        # Agregar nuevos widgets de indicadores
+        row, col = 0, 0
+        for name, data_tuple in datos_indicadores.items():
+            display_value = ""
+            state = "neutral"
+
+            if name in ['SMA10', 'SMA50', 'SMA200', 'RSI', 'Volatilidad']:
+                # Tupla de (valor, estado)
+                value, state = data_tuple
+                display_value = f"{value:.2f}"
+            
+            elif name == 'MACD':
+                # Tupla de (linea, señal, hist, estado)
+                macd_line, signal_line, _, state = data_tuple
+                display_value = f"L: {macd_line:.2f} S: {signal_line:.2f}"
+
+            elif name == 'Estocastico':
+                # Tupla de (k, d, estado)
+                k_percent, d_percent, state = data_tuple
+                display_value = f"%K: {k_percent:.2f} %D: {d_percent:.2f}"
+
+            # Crear y añadir el widget
+            widget = IndicatorWidget(name, display_value, state)
+            self.indicators_layout.addWidget(widget, row, col)
+            
+            col += 1
+            if col >= 4:  # 4 indicadores por fila
+                col = 0
+                row += 1
+            self.statusBar().showMessage("Indicadores calculados correctamente.", 4000)
+
+    def on_indicator_error(self, msg: str):
+        self.statusBar().showMessage(msg, 4000)
 
     def update_chart(self, period, df):
         dates = df.index.to_list()
