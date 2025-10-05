@@ -250,7 +250,7 @@ class MainWindow(QMainWindow):
 
     def start_fetch(self, ticker: str):
         self.current_ticker = ticker
-        self.statusBar().showMessage(f"Buscando datos para {ticker} ...")
+        self.statusBar().showMessage(f"Buscando datos para {ticker} ...", 3000)
         
         self.news_stack.setCurrentIndex(0)
         self.summary_stack.setCurrentIndex(0)
@@ -281,7 +281,7 @@ class MainWindow(QMainWindow):
         self.thread_pool.start(summary) """
 
         self.central_stack.setCurrentIndex(2)
-        self.statusBar().showMessage('Historial descargado correctamente.')
+        self.statusBar().showMessage('Historial descargado correctamente.', 3000)
         
         indicadores = GenerateDatosIndicadoresTask(self.current_ticker)
         indicadores.signals.finished.connect(self.indicators_generated)
@@ -334,12 +334,12 @@ class MainWindow(QMainWindow):
             if col >= 4:  # 4 indicadores por fila
                 col = 0
                 row += 1
-            self.statusBar().showMessage("Indicadores calculados correctamente.", 4000)
+            self.statusBar().showMessage("Indicadores calculados correctamente.", 3000)
 
-        self._try_generate_summary()
+        self._check_if_ready_for_summary()
 
     def on_indicator_error(self, msg: str):
-        self.statusBar().showMessage(msg, 4000)
+        self.statusBar().showMessage(msg, 3000)
 
     def update_chart(self, period, df):
         dates = df.index.to_list()
@@ -356,12 +356,12 @@ class MainWindow(QMainWindow):
 
     def on_price_history_error(self, msg: str):
         self.central_stack.setCurrentIndex(3)
-        self.statusBar().showMessage(msg)
+        self.statusBar().showMessage(msg, 3000)
         QMessageBox.warning(self, 'Error', msg)
 
     def on_news_fetched(self, news: List[dict]):
         self._fetched_news_data = news
-        self.statusBar().showMessage('Noticias descargadas correctamente.')
+        self.statusBar().showMessage('Noticias descargadas correctamente.', 3000)
         self.news_list.clear()
 
         if not news:
@@ -376,25 +376,28 @@ class MainWindow(QMainWindow):
 
         self.news_stack.setCurrentIndex(1)   
 
-        self._try_generate_summary()
+        self._check_if_ready_for_summary()
     
-    def _try_generate_summary(self):
-        print("Trying to generate summary...")
+    def _check_if_ready_for_summary(self):
         if self._fetched_news_data is not None and self._fetched_indicators_data is not None:
-            self.statusBar().showMessage("Generando resumen con IA...", 3000)
-            
-            summary_task = GenerateSummaryTask(
-                self.current_ticker, 
-                self._fetched_news_data, 
-                self._fetched_indicators_data
-            )
-            summary_task.signals.finished.connect(self.on_summary_generated)
-            summary_task.signals.error.connect(self.on_summary_error)
-            self.thread_pool.start(summary_task)
 
-            # Reiniciar para la próxima búsqueda
+            news = self._fetched_news_data
+            indicators = self._fetched_indicators_data
+            ticker = self.current_ticker
+
             self._fetched_news_data = None
             self._fetched_indicators_data = None
+
+
+            self._generate_summary(ticker, news, indicators)
+
+    def _generate_summary(self, ticker, news, indicadores):
+        self.statusBar().showMessage("Generando resumen...", 3000)
+        
+        summary_task = GenerateSummaryTask(ticker, news, indicadores)
+        summary_task.signals.finished.connect(self.on_summary_generated)
+        summary_task.signals.error.connect(self.on_summary_error)
+        self.thread_pool.start(summary_task)
 
     def on_summary_generated(self, ticker: str, summary: str):
 
@@ -402,13 +405,13 @@ class MainWindow(QMainWindow):
         if ticker != self.current_ticker:
             return
         
-        self.statusBar().showMessage('Resumen generado correctamente.')
+        self.statusBar().showMessage('Resumen generado correctamente.', 3000)
         self.summary_view.clear()
         self.summary_view.append(summary)
         self.summary_stack.setCurrentIndex(1)
         
     def on_summary_error(self, error: str):
-        self.statusBar().showMessage('Error al generar el resumen.')
+        self.statusBar().showMessage('Error al generar el resumen.', 3000)
         self.summary_view.clear()
         self.summary_view.append(error)
 
@@ -423,7 +426,7 @@ class MainWindow(QMainWindow):
             self.popup.show()
 
     def on_news_error(self, msg: str):
-        self.statusBar().showMessage(msg)
+        self.statusBar().showMessage(msg, 3000)
         if hasattr(self, "news_list") and self.news_list is not None:
             self.news_list.clear()
             self.news_list.addItem(msg)
@@ -445,7 +448,7 @@ class MainWindow(QMainWindow):
     
     def clear_history(self):
         self.history_list.clear()
-        self.statusBar().showMessage("Historial borrado.")
+        self.statusBar().showMessage("Historial borrado.", 3000)
 
     def on_history_clicked(self, item: QListWidgetItem):
         ticker = item.data(Qt.ItemDataRole.UserRole)  
