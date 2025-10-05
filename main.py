@@ -257,6 +257,9 @@ class MainWindow(QMainWindow):
         
         self.chart.reset_period()
         
+        self._fetched_news_data = None
+        self._fetched_indicators_data = None
+
         price_history = PriceHistoryFetchTask(ticker, period='1y')
         price_history.signals.finished.connect(self.on_price_history_fetched)
         price_history.signals.error.connect(self.on_price_history_error)
@@ -272,10 +275,10 @@ class MainWindow(QMainWindow):
         news.signals.error.connect(self.on_news_error)
         self.thread_pool.start(news)
         
-        summary = GenerateSummaryTask(self.current_ticker)
+        """ summary = GenerateSummaryTask(self.current_ticker, news)
         summary.signals.finished.connect(self.on_summary_generated)
         summary.signals.error.connect(self.on_summary_error)
-        self.thread_pool.start(summary)
+        self.thread_pool.start(summary) """
 
         self.central_stack.setCurrentIndex(2)
         self.statusBar().showMessage('Historial descargado correctamente.')
@@ -293,6 +296,7 @@ class MainWindow(QMainWindow):
         """ print("Indicadores generados:", datos_indicadores)
         self.statusBar().showMessage('Indicadores generados correctamente.') """
 
+        self._fetched_indicators_data = datos_indicadores
         # Limpiar el layout actual
         for i in reversed(range(self.indicators_layout.count())):
             self.indicators_layout.itemAt(i).widget().setParent(None) 
@@ -317,6 +321,10 @@ class MainWindow(QMainWindow):
                 # Tupla de (k, d, estado)
                 k_percent, d_percent, state = data_tuple
                 display_value = f"%K: {k_percent:.2f} %D: {d_percent:.2f}"
+            elif name == 'Sentimiento':
+                value, state = data_tuple
+                value = value * 100  # Convertir a porcentaje
+                display_value = f"{value:.2f}%"
 
             # Crear y añadir el widget
             widget = IndicatorWidget(name, display_value, state)
@@ -327,6 +335,8 @@ class MainWindow(QMainWindow):
                 col = 0
                 row += 1
             self.statusBar().showMessage("Indicadores calculados correctamente.", 4000)
+
+        self._try_generate_summary()
 
     def on_indicator_error(self, msg: str):
         self.statusBar().showMessage(msg, 4000)
@@ -350,6 +360,7 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, 'Error', msg)
 
     def on_news_fetched(self, news: List[dict]):
+        self._fetched_news_data = news
         self.statusBar().showMessage('Noticias descargadas correctamente.')
         self.news_list.clear()
 
@@ -364,7 +375,27 @@ class MainWindow(QMainWindow):
             self.news_list.addItem(item)   
 
         self.news_stack.setCurrentIndex(1)   
+
+        self._try_generate_summary()
     
+    def _try_generate_summary(self):
+        print("Trying to generate summary...")
+        if self._fetched_news_data is not None and self._fetched_indicators_data is not None:
+            self.statusBar().showMessage("Generando resumen con IA...", 3000)
+            
+            summary_task = GenerateSummaryTask(
+                self.current_ticker, 
+                self._fetched_news_data, 
+                self._fetched_indicators_data
+            )
+            summary_task.signals.finished.connect(self.on_summary_generated)
+            summary_task.signals.error.connect(self.on_summary_error)
+            self.thread_pool.start(summary_task)
+
+            # Reiniciar para la próxima búsqueda
+            self._fetched_news_data = None
+            self._fetched_indicators_data = None
+
     def on_summary_generated(self, ticker: str, summary: str):
 
         # Ignore old tickers

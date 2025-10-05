@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 import indicadores
-
+from transformers import pipeline
 
 # QRunnable doesn't support signals so they must be included here
 class PriceHistoryFetchSignals(QObject):
@@ -85,8 +85,6 @@ class NewsFetchTask(QRunnable):
                 "time": content.get("pubDate"),
                 "summary": content.get("summary")
                 })
-            
-            #mostrar news en la terminal
 
             self.signals.finished.emit(news)
 
@@ -103,8 +101,10 @@ class GenerateSummaryTask(QRunnable):
     Uses Gemini API to generate a brief summary
     """
     
-    def __init__(self, ticker: str):
+    def __init__(self, ticker: str, news, indicators_data):
         super().__init__()
+        self.news = news
+        self.indicadores = indicators_data
         
         load_dotenv()
         
@@ -114,10 +114,23 @@ class GenerateSummaryTask(QRunnable):
 
     def run(self):
         try:
-            summary = self.client.models.generate_content(
-            model="gemini-2.5-flash", contents=f"Quiero un resumen sobre {self.ticker}. Si se trata de un par de trading, solo incluye informacion sobre el activo. Ve al grano, solo quiero informacion lo menos verbosa posible. No uses negritas."
+            
+            news_text = "\n".join([f"- {n['title']}: {n['summary']}" for n in self.news])
+            
+            indicators_text = "\n".join([f"- {name}: {data[1]}" for name, data in self.indicadores.items()])
+
+            prompt = (
+                f"Basándote en las siguientes noticias recientes sobre {self.ticker}, "
+                "genera un resumen conciso sobre la situación actual del activo. "
+                "Ve al grano, solo quiero información lo menos verbosa posible. No uses negritas.\n\n"
+                "--- NOTICIAS ---\n"
+                f"{news_text}"
+                "\n\n--- INDICADORES ---\n"
+                f"{indicators_text}"
             )
 
+            summary = self.client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+    
             if not summary:
                 self.signals.error.emit(
                     f"No se pudo generar un resumen para {self.ticker}. "
@@ -127,6 +140,7 @@ class GenerateSummaryTask(QRunnable):
             self.signals.finished.emit(self.ticker, summary.text)
 
         except Exception as e:
+            print(e)
             self.signals.error.emit(str(e))
 
 class GenerateDatosIndicadoresSignals(QObject):
@@ -139,6 +153,7 @@ class GenerateDatosIndicadoresTask(QRunnable):
         super().__init__()
         self.ticker = ticker
         self.signals = GenerateDatosIndicadoresSignals()
+        self.pipe = pipeline("text-classification", model="ProsusAI/finbert")
 
     def fetch_data(self):
 
@@ -161,6 +176,31 @@ class GenerateDatosIndicadoresTask(QRunnable):
             RSI_value, estado_RSI = indicadores.rsi(df['Close'])
             Volatilidad_value, estado_Volatilidad = indicadores.volatilidad(df['Close'])
 
+            data = yf.Ticker(self.ticker).get_news(count=10)
+
+            news = []
+
+            for n in data:
+                content = n.get("content", {})
+                news.append({
+                "title": content.get("title"),
+                "link": content.get("canonicalUrl", {}).get("url"),
+                "publisher": content.get("provider", {}).get("displayName"),
+                "time": content.get("pubDate"),
+                "summary": content.get("summary")
+                })
+
+            resumen = [n['summary'] for n in news]
+            print(resumen)
+
+            sentiments = [self.pipe(n['summary']) for n in news]
+            print(sentiments)
+
+            mapa = {"positive": 1, "negative": -1, "neutral": 0}
+
+            Promedio_sentimientos = sum([s[0]['score'] * mapa[s[0]['label'].lower()] for s in sentiments]) / len(sentiments)
+            print("Promedio de sentimientos:", Promedio_sentimientos)
+
             datos_indicadores = {
                 'SMA10': (SMA10, estado_SMA10),
                 'SMA50': (SMA50, estado_SMA50),
@@ -168,7 +208,8 @@ class GenerateDatosIndicadoresTask(QRunnable):
                 'MACD': (MACD_line, Signal_line, Histograma, estado_MACD),
                 'Estocastico': (K_percent, D_percent, estado_Estocastico),
                 'RSI': (RSI_value, estado_RSI),
-                'Volatilidad': (Volatilidad_value, estado_Volatilidad)
+                'Volatilidad': (Volatilidad_value, estado_Volatilidad),
+                'Sentimiento': (Promedio_sentimientos, 'good' if Promedio_sentimientos > 0.1 else 'bad' if Promedio_sentimientos < 0.1 else 'ninguno')
             }
             self.signals.finished.emit(datos_indicadores)
             
