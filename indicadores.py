@@ -8,12 +8,15 @@ def promedio_movil(data, periodo):
     #si el precio de cierrre es aproximadamente igual al promedio movil
     if abs(data.iloc[-1].item() - promedio.iloc[-1].item()) < 0.01 * promedio.iloc[-1].item():
         estado = "neutral"
+        info = "Neutral"
     elif data.iloc[-1].item() > promedio.iloc[-1].item():
         estado = "good"
+        info = "Bueno"
     else:
         estado = "bad"
+        info = "Malo"
 
-    return promedio.iloc[-1].item(), estado
+    return promedio.iloc[-1].item(), estado, info
 
 def macd(data, periodo_corto=12, periodo_largo=26, periodo_signal=9):
     ema_corto = data.ewm(span=periodo_corto, adjust=False).mean()
@@ -25,13 +28,16 @@ def macd(data, periodo_corto=12, periodo_largo=26, periodo_signal=9):
     #Histograma aproximada a cero
     if abs(histograma.iloc[-1].item()) < 0.01 * abs(macd_line.iloc[-1].item()):
         estado = "neutral"
+        info = "Neutral"
     #linea MACD por encima de la linea de señal
     elif macd_line.iloc[-1].item() > signal_line.iloc[-1].item():
         estado = "good"
+        info = "Bueno"
     else:
-        estado = "bad"   
+        estado = "bad"
+        info = "Malo" 
 
-    return macd_line.iloc[-1].item(), signal_line.iloc[-1].item(), histograma.iloc[-1].item(), estado
+    return macd_line.iloc[-1].item(), signal_line.iloc[-1].item(), histograma.iloc[-1].item(), estado, info
 
 def oscilador_estocastico(data, periodo=14):
     low_min = data['Low'].rolling(window=periodo).min()
@@ -48,21 +54,28 @@ def oscilador_estocastico(data, periodo=14):
     if K_val > D_val and K_prev <= D_prev:
         if K_val > 80:
             estado = "bad"
+            info = "Malo"
         else:
             estado = "good"
+            info = "Bueno"
     elif K_val < D_val and K_prev >= D_prev:
         if K_val < 20:
             estado = "neutral"
+            info = "Neutral"
         else:
             estado = "bad"
+            info = "Malo"
     elif K_val > 80:
         estado = "bad"
+        info = "Malo"
     elif K_val < 20:
         estado = "good"
+        info = "Bueno"
     else:
         estado = "ninguno"
+        info = "Ninguno"
 
-    return k_percent.iloc[-1].item(), d_percent.iloc[-1].item(), estado
+    return k_percent.iloc[-1].item(), d_percent.iloc[-1].item(), estado, info
 
 def rsi(data, periodo=14):
     delta = data.diff()
@@ -74,13 +87,16 @@ def rsi(data, periodo=14):
     #rsi < 30 sobreventa
     if rsi.iloc[-1].item() < 30:
         estado = "good"     
+        info = "Sobreventa"
     #rsi > 70 sobrecompra
     elif rsi.iloc[-1].item() > 70:
         estado = "bad"
+        info = "Sobrecompra"
     else:
         estado = "ninguno"
+        info = "Normal"
 
-    return rsi.iloc[-1].item(), estado
+    return rsi.iloc[-1].item(), estado, info
 
 def volatilidad(data, periodo=30):
     log_returns = np.log(data / data.shift(1))
@@ -89,13 +105,16 @@ def volatilidad(data, periodo=30):
     #volatibilidad baja
     if volatilidad.iloc[-1].item() < 0.15:
         estado = "ninguno"
+        info = "Baja volatilidad"
     #volatibilidad alta
     elif volatilidad.iloc[-1].item() > 0.30:
         estado = "bad"
+        info = "Alta volatilidad"
     else:
         estado = "neutral"
+        info = "Neutral"
 
-    return volatilidad.iloc[-1].item(), estado
+    return volatilidad.iloc[-1].item(), estado, info
 
 def test():
     data = yf.download("AAPL", period="1y", interval="1d", progress=False)

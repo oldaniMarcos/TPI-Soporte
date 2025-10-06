@@ -340,16 +340,19 @@ class StatusCircle(QWidget):
 # Indicator widget
 
 class IndicatorWidget(QWidget):
-    def __init__(self, title: str, value: float, status: str = "neutral", parent=None):
+    def __init__(self, title: str, value: float, status: str = "neutral", info: str = "Ninguno", parent=None):
         super().__init__(parent)
 
         self.circle = StatusCircle()
 
         self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.title_label.setStyleSheet("font-weight: bold; font-size: 17px;")
 
         self.value_label = QLabel(str(value))
         self.value_label.setStyleSheet("font-size: 16px; color: #333;")
+        
+        self.info_label = QLabel(info)
+        self.info_label.setStyleSheet("font-weight: bold; font-size: 16px; color: #333;")
 
         h_layout = QHBoxLayout()
         h_layout.setContentsMargins(0, 0, 0, 0)
@@ -361,6 +364,7 @@ class IndicatorWidget(QWidget):
         text_layout.setSpacing(2)
         text_layout.addWidget(self.title_label)
         text_layout.addWidget(self.value_label)
+        text_layout.addWidget(self.info_label)
         
         h_layout.addLayout(text_layout)
         self.setLayout(h_layout)
@@ -373,12 +377,16 @@ class IndicatorWidget(QWidget):
         """Changes color depending on status"""
         if status == "good":
             self.circle.setColor("#4CAF50")
+            self.info_label.setStyleSheet("color: #4CAF50; font-weight: bold; font-size: 16px;")
         elif status == "neutral":
             self.circle.setColor("#FFC107")
+            self.info_label.setStyleSheet("color: #FFC107; font-weight: bold; font-size: 16px;")
         elif status == "bad":
             self.circle.setColor("#F44336")
+            self.info_label.setStyleSheet("color: #F44336; font-weight: bold; font-size: 16px;")
         else:
             self.circle.setColor("#9E9E9E")
+            self.info_label.setStyleSheet("color: #9E9E9E; font-weight: bold; font-size: 16px;")
 
     def setValue(self, value: float):
         """Updates shown value"""

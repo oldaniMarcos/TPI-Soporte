@@ -292,9 +292,6 @@ class MainWindow(QMainWindow):
             self.update_chart(period, df)
 
     def indicators_generated(self, datos_indicadores):
-        # Aquí puedes actualizar los widgets de indicadores con los datos recibidos
-        """ print("Indicadores generados:", datos_indicadores)
-        self.statusBar().showMessage('Indicadores generados correctamente.') """
 
         self._fetched_indicators_data = datos_indicadores
         # Limpiar el layout actual
@@ -306,28 +303,25 @@ class MainWindow(QMainWindow):
         for name, data_tuple in datos_indicadores.items():
             display_value = ""
             state = "neutral"
+            info_text = ""
 
             if name in ['SMA10', 'SMA50', 'SMA200', 'RSI', 'Volatilidad']:
-                # Tupla de (valor, estado)
-                value, state = data_tuple
+                # Tupla de (valor, estado, info)
+                value, state, info_text = data_tuple
                 display_value = f"{value:.2f}"
             
             elif name == 'MACD':
-                # Tupla de (linea, señal, hist, estado)
-                macd_line, signal_line, _, state = data_tuple
+                # Tupla de (linea, señal, hist, estado, info)
+                macd_line, signal_line, _, state, info_text = data_tuple
                 display_value = f"L: {macd_line:.2f} S: {signal_line:.2f}"
 
             elif name == 'Estocastico':
-                # Tupla de (k, d, estado)
-                k_percent, d_percent, state = data_tuple
+                # Tupla de (k, d, estado, info)
+                k_percent, d_percent, state, info_text = data_tuple
                 display_value = f"%K: {k_percent:.2f} %D: {d_percent:.2f}"
-            elif name == 'Sentimiento':
-                value, state = data_tuple
-                value = value * 100  # Convertir a porcentaje
-                display_value = f"{value:.2f}%"
 
             # Crear y añadir el widget
-            widget = IndicatorWidget(name, display_value, state)
+            widget = IndicatorWidget(name, display_value, state, info_text)
             self.indicators_layout.addWidget(widget, row, col)
             
             col += 1
