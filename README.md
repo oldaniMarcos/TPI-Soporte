@@ -129,5 +129,5 @@ V > 30% → Bad (Riesgo elevado)
 
 ## Casos de Uso
 
-Se pueden encontrar en [el siguiente link]()
+Se pueden encontrar en [el siguiente link](https://github.com/oldaniMarcos/TPI-Soporte/blob/main/Casos%20de%20Uso.pdf)
 
