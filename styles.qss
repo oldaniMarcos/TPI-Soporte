@@ -28,3 +28,10 @@ QComboBox {
     font-size: 20px;
     text-align: center;
 }
+
+QTextBrowser, QListWidget {
+    color: black;
+    border: none;
+    background-color: #F8F8F8;
+    font-size: 13px;
+}

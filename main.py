@@ -42,6 +42,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Dashboard")
         self.resize(1200, 800)
+        self.setMinimumSize(1020, 600)
         self.thread_pool = QThreadPool()
 
         # --- Top bar ---
@@ -148,6 +149,10 @@ class MainWindow(QMainWindow):
 
         self.chart = ChartWidget()
         self.chart.period_changed.connect(self.on_period_changed)
+        size_policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.chart.setSizePolicy(size_policy)
+        self.chart.setFixedHeight(320)
+
         central_layout.addWidget(self.chart, stretch=4)
 
         self.rating_group = QGroupBox("Indicadores")
@@ -174,6 +179,7 @@ class MainWindow(QMainWindow):
 
         # News stack
         self.news_stack = QStackedWidget()
+        self.news_stack.setMinimumHeight(330)
 
         # News loading screen
         news_loading = QGroupBox('Últimas Noticias')
@@ -229,6 +235,9 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(central)
+        
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         
         return scroll
 
