@@ -41,7 +41,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Dashboard")
-        self.resize(1200, 800)
+        self.resize(1020, 600)
         self.setMinimumSize(1020, 600)
         self.thread_pool = QThreadPool()
 
@@ -157,23 +157,6 @@ class MainWindow(QMainWindow):
 
         self.rating_group = QGroupBox("Indicadores")
         self.indicators_layout = QGridLayout(self.rating_group)
-        """ # Indicadores de ejemplo, eliminar despues
-        ind1 = IndicatorWidget("Promedio Móvil 50d", 135.7, "good")
-        ind2 = IndicatorWidget("RSI", 72, "bad")
-        ind3 = IndicatorWidget("Volatilidad", 1.25, "neutral")
-        ind4 = IndicatorWidget("Promedio Móvil 50d", 135.7, "good")
-        ind5 = IndicatorWidget("RSI", 72, "bad")
-        ind6 = IndicatorWidget("Volatilidad", 1.25, "neutral")
-        ind7 = IndicatorWidget("Promedio Móvil 50d", 135.7, "good")
-
-        rl = QGridLayout(rating_group)
-        rl.addWidget(ind1, 0, 0)
-        rl.addWidget(ind2, 0, 1)
-        rl.addWidget(ind3, 0, 2)
-        rl.addWidget(ind4, 0, 3)
-        rl.addWidget(ind5, 1, 0)
-        rl.addWidget(ind6, 1, 1)
-        rl.addWidget(ind7, 1, 2) """
         
         central_layout.addWidget(self.rating_group, stretch=1)
 
@@ -221,6 +204,21 @@ class MainWindow(QMainWindow):
         self.summary_view.setOpenExternalLinks(True)
         sl_content.addWidget(self.summary_view)
         self.summary_stack.addWidget(summary_group)
+
+        #summary_Error
+        summary_error = QGroupBox("Resumen")
+        sl_error = QVBoxLayout(summary_error)
+        error_summary_label = QLabel("⛔ No se pudo generar el resumen")
+        error_summary_label.setStyleSheet("""
+            QLabel {
+                font-size: 15px;
+            }
+        """)
+        error_summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sl_error.addWidget(error_summary_label)
+        summary_error.setLayout(sl_error)
+        self.summary_stack.addWidget(summary_error)
+        
 
         self.summary_stack.setCurrentIndex(0)
 
@@ -417,6 +415,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage('Error al generar el resumen.', 3000)
         self.summary_view.clear()
         self.summary_view.append(error)
+        self.summary_stack.setCurrentIndex(2)
 
     def on_news_item_double_clicked(self, item: QListWidgetItem):
         """
