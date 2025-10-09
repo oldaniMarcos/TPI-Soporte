@@ -49,9 +49,11 @@ El modelo de IA que se usa para la generación de resúmenes es **Gemini 2.5 Fla
 
 La lista completa de librerias utilizadas en el proyecto se puede encontrar en el archivo [requirements.txt](https://github.com/oldaniMarcos/TPI-Soporte/blob/main/requirements.txt)
 
-## Nota sobre la utilización de persistencia
+## Uso de Base de Datos
 
-En su versión actual, el sistema no hace uso de una base de datos, ya que toda la información es generada en el momento de la búsqueda de la empresa. Los únicos datos que se preservan son los símbolos guardados en el historial, que se gestionan con una funcionalidad de PyQt6 que permite guardar datos en el registro de Windows o en análogos de otras plataformas. Podría contemplarse el uso de SQLite u otras soluciones en el caso de que el proyecto crezca y se requiera conservar más información.
+El sistema hace uso de **SQLite + SQLAlchemy** para preservar el historial de tickers consultados, dada la dinámica del sistema no es necesario almacenar mas datos, ya que requiere que todos estén actualizados. El modelo de dominio es el siguiente:
+
+<img width="162" height="82" alt="Diagrama sin título drawio" src="https://github.com/user-attachments/assets/84254e7b-f355-4ed3-8470-858004b19b7a" />
 
 ## Calculos
 
@@ -126,6 +128,27 @@ La interpretación que le dimos a la Volatilidad (V) es la siguiente:
 V < 15% → Ninguno (Estabilidad extrema)
 V > 30% → Bad (Riesgo elevado)
 15% <= V <= 30% → Neutral (Riesgo moderado)
+
+### ATR
+
+El **ATR (Average True Range)** es un indicador técnico desarrollado por J. Welles Wilder que mide la volatilidad real del mercado.
+Considera los gaps y las variaciones entre los precios máximos y mínimos diarios, ofreciendo una visión más completa del rango real de movimiento del activo.
+
+Para su cálculo, se determina primero el True Range (TR) de cada período como el máximo de los siguientes tres valores:
+
++ TR₁ = High − Low
++ TR₂ = |High − Close₍ₜ₋₁₎|
++ TR₃ = |Low − Close₍ₜ₋₁₎|
+
+Luego, el ATR se obtiene como el promedio móvil simple del TR durante un período (se ha utilizado uno de 14 días):
+
++ ATR = Promedio(TR₁₄)
+
+La interpretación que le dimos al ATR es la siguiente:
+
++ ATR < 1 → Ninguno (Baja volatilidad real)
++ ATR > 5 → Bad (Alta volatilidad real)
++ 1 <= ATR <= 5 → Neutral (Volatilidad moderada)
 
 ## Casos de Uso
 
