@@ -1,45 +1,28 @@
 import sys
-import math
-import yfinance as yf
-from dataclasses import dataclass
-from typing import List, Optional
-from datetime import datetime
+from typing import List
 
 from PyQt6.QtCore import (
-    Qt, QSize, QRectF, pyqtSignal, QObject, QThreadPool, QRunnable, QPointF, QUrl, QSettings
-)
-from PyQt6.QtGui import (
-    QPainter, QPen, QBrush, QColor, QFont, QDesktopServices
+    Qt, QThreadPool
 )
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QListWidget, QListWidgetItem, QLabel,
-    QTextBrowser, QFrame, QMessageBox, QSizePolicy, QSplitter, QGroupBox,
-    QScrollArea, QStackedWidget, QProgressBar, QDialog, QDialogButtonBox, QGridLayout
+    QTextBrowser, QMessageBox, QSizePolicy, QSplitter, QGroupBox,
+    QScrollArea, QStackedWidget, QProgressBar, QGridLayout
 )
 from qt_material import apply_stylesheet
-import pyqtgraph as pg
 
 from tasks import PriceHistoryFetchTask, NewsFetchTask, GenerateSummaryTask, GenerateDatosIndicadoresTask
 
-from widgets import WheelRatingSelector, ChartWidget, NewsDetailPopup, IndicatorWidget
+from widgets import ChartWidget, NewsDetailPopup, IndicatorWidget
 
-# --------- Datos y tareas ---------
-# Revisar
-@dataclass
-class StockData:
-    ticker: str
-    dates: List
-    prices: List[float]
-    rating: str
-    news_items: List[str]
-    summary: str
-
+from db import SessionLocal, TickerHistory, init_db
 
 # --------- Main Window ---------
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        init_db()
         self.setWindowTitle("Dashboard")
         self.resize(1020, 600)
         self.setMinimumSize(1020, 600)
@@ -112,10 +95,13 @@ class MainWindow(QMainWindow):
 
         # History
         right_panel = QGroupBox("Historial")
+        right_panel.setMaximumWidth(250)
         rh_layout = QVBoxLayout(right_panel)
         self.history_list = QListWidget()
         self.load_history()
         self.history_list.setUniformItemSizes(True)
+        self.history_list.setTextElideMode(Qt.TextElideMode.ElideRight) # <---
+        self.history_list.setWordWrap(False)
         self.history_list.itemDoubleClicked.connect(self.on_history_clicked)
         rh_layout.addWidget(self.history_list)
         clear_btn = QPushButton("Limpiar")
@@ -211,7 +197,7 @@ class MainWindow(QMainWindow):
         error_summary_label = QLabel("⛔ No se pudo generar el resumen")
         error_summary_label.setStyleSheet("""
             QLabel {
-                font-size: 15px;
+                font-size: 20px;
             }
         """)
         error_summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -281,11 +267,6 @@ class MainWindow(QMainWindow):
         news.signals.finished.connect(self.on_news_fetched)
         news.signals.error.connect(self.on_news_error)
         self.thread_pool.start(news)
-        
-        """ summary = GenerateSummaryTask(self.current_ticker, news)
-        summary.signals.finished.connect(self.on_summary_generated)
-        summary.signals.error.connect(self.on_summary_error)
-        self.thread_pool.start(summary) """
 
         self.central_stack.setCurrentIndex(2)
         self.statusBar().showMessage('Historial descargado correctamente.', 3000)
@@ -445,6 +426,8 @@ class MainWindow(QMainWindow):
         item = QListWidgetItem(f"{ticker}")
         item.setData(Qt.ItemDataRole.UserRole, ticker)
         
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        
         self.history_list.insertItem(0, item)
         self.history_list.setCurrentRow(0)
     
@@ -458,30 +441,29 @@ class MainWindow(QMainWindow):
         self.chart.reset()
         self.central_stack.setCurrentIndex(1)
         self.start_fetch(ticker)
-        
+
     def save_history(self):
-        settings = QSettings('Dashboard', 'Dashboard')
-        tickers = []
+        session = SessionLocal()
+        session.query(TickerHistory).delete()
+        
         for i in range(self.history_list.count()):
             item = self.history_list.item(i)
-            tickers.append(item.data(Qt.ItemDataRole.UserRole))
-        settings.setValue('history', tickers)
+            ticker = item.data(Qt.ItemDataRole.UserRole)
+            session.add(TickerHistory(ticker=ticker))
+            
+        session.commit()
+        session.close()
     
     def load_history(self):
-        settings = QSettings('Dashboard', 'Dashboard')
-        tickers = settings.value('history', [])
-        if tickers:
-            for ticker in tickers:
-                self.add_history_entry(ticker)
+        session = SessionLocal()
+        tickers = session.query(TickerHistory).all()
+        for entry in tickers:
+            self.add_history_entry(entry.ticker)
+        session.close()
     
     def closeEvent(self, event):
         self.save_history()
         return super().closeEvent(event)
-
-    # No utilizado por el momento
-    #     if self.current_data:
-    #         self.current_data.rating = rating
-    #         self.summary_view.append(f"<p><i>Calificación ajustada manualmente a: {rating}</i></p>")
 
 def main():
     app = QApplication(sys.argv)

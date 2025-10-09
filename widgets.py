@@ -2,7 +2,7 @@ import math
 import pyqtgraph as pg
 from PyQt6.QtCore import Qt, QSize, QRectF, pyqtSignal, QPointF
 from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont,QDesktopServices, QRadialGradient
-from PyQt6.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem, QDialog, QDialogButtonBox, QComboBox
+from PyQt6.QtWidgets import QWidget, QSizePolicy, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox
 from PyQt6.QtCore import QUrl
 
 
