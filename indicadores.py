@@ -116,6 +116,40 @@ def volatilidad(data, periodo=30):
 
     return volatilidad.iloc[-1].item(), estado, info
 
+def atr(data_high, data_low, data_close, periodo=14):
+    """
+    Calcula el Average True Range (ATR) para medir la volatilidad real del activo.
+    data: DataFrame con columnas ['High', 'Low', 'Close']
+    periodo: ventana de cálculo (por defecto 14)
+    """
+
+    high = data_high
+    low = data_low
+    close = data_close
+
+    # True Range (TR)
+    tr1 = high - low
+    tr2 = (high - close.shift()).abs()
+    tr3 = (low - close.shift()).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    atr = tr.rolling(window=periodo).mean()
+
+    last_atr = atr.iloc[-1].item()
+
+    if last_atr < 1:
+        estado = "ninguno"
+        info = "Baja volatilidad"
+    elif last_atr > 5:
+        estado = "bad"
+        info = "Alta volatilidad"
+    else:
+        estado = "neutral"
+        info = "Neutral"
+
+    return last_atr, estado, info
+
+
 def test():
     data = yf.download("AAPL", period="1y", interval="1d", progress=False)
     print(data['Close'])

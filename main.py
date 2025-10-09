@@ -293,7 +293,7 @@ class MainWindow(QMainWindow):
             state = "neutral"
             info_text = ""
 
-            if name in ['SMA10', 'SMA50', 'SMA200', 'RSI', 'Volatilidad']:
+            if name in ['SMA10', 'SMA50', 'SMA200', 'RSI', 'Volatilidad', 'ATR14']:
                 # Tupla de (valor, estado, info)
                 value, state, info_text = data_tuple
                 display_value = f"{value:.2f}"

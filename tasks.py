@@ -177,6 +177,7 @@ class GenerateDatosIndicadoresTask(QRunnable):
             K_percent, D_percent, estado_Estocastico, info_Estocastico = indicadores.oscilador_estocastico(df) 
             RSI_value, estado_RSI, info_RSI = indicadores.rsi(df['Close'])
             Volatilidad_value, estado_Volatilidad, info_Volatilidad = indicadores.volatilidad(df['Close'])
+            ATR_value, estado_ATR, info_ATR = indicadores.atr(df['High'], df['Low'], df['Close'], periodo=14)
 
             datos_indicadores = {
                 'SMA10': (SMA10, estado_SMA10, info_SMA10),
@@ -186,6 +187,7 @@ class GenerateDatosIndicadoresTask(QRunnable):
                 'Estocastico': (K_percent, D_percent, estado_Estocastico, info_Estocastico),
                 'RSI': (RSI_value, estado_RSI, info_RSI),
                 'Volatilidad': (Volatilidad_value, estado_Volatilidad, info_Volatilidad),
+                'ATR14': (ATR_value, estado_ATR, info_ATR)
             }
             self.signals.finished.emit(datos_indicadores)
             
