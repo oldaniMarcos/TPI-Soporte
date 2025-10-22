@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QTextBrowser, QMessageBox, QSizePolicy, QSplitter, QGroupBox,
     QScrollArea, QStackedWidget, QProgressBar, QGridLayout
 )
+from PyQt6.QtGui import QIcon
 from qt_material import apply_stylesheet
 
 from tasks import PriceHistoryFetchTask, NewsFetchTask, GenerateSummaryTask, GenerateDatosIndicadoresTask
@@ -467,6 +468,7 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon("assets/logo.png"))
     apply_stylesheet(app, 'light_cyan_500.xml', invert_secondary=True)
     with open("styles.qss", "r") as f:
         app.setStyleSheet(app.styleSheet() + f.read())
