@@ -35,3 +35,7 @@ QTextBrowser, QListWidget {
     background-color: #F8F8F8;
     font-size: 13px;
 }
+
+QTextBrowser {
+    text-align: justify;
+}
